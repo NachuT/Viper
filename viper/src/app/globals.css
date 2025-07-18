@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Dancing+Script:wght@700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -7,6 +7,13 @@
   --accent: #22c55e;
   --accent-dark: #15803d;
   --font-main: 'Inter', Arial, Helvetica, sans-serif;
+  --font-cursive: 'Dancing Script', cursive;
+}
+
+.welcome-cursive {
+  font-family: var(--font-cursive);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 @theme inline {
@@ -27,6 +34,14 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-main);
+}
+
+/* Light mode theme */
+.light {
+  --background: #ffffff;
+  --foreground: #171717;
+  --accent: #22c55e;
+  --accent-dark: #15803d;
 }
 
 .viper-glow {
