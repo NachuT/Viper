@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Viper Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <style>
+      #editor { height: 70vh; width: 100%; border-radius: 0.5rem; }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white flex flex-col items-center min-h-screen">
+    <div class="flex flex-col items-center w-full py-8">
+      <img src="darklogo.png" alt="Viper Logo" class="w-16 h-16 mb-2" />
+      <h1 class="text-3xl font-extrabold mb-4">Viper</h1>
+      <div class="w-full max-w-6xl bg-gray-800 rounded-lg shadow-lg p-0 flex min-h-[60vh]">
+        <div id="sidebar" class="w-64 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
+          <div class="font-bold text-green-400 mb-2">Project Files</div>
+          <ul id="file-list" class="text-sm"></ul>
+        </div>
+        <div class="flex-1 p-6">
+          <div id="editor"></div>
+        </div>
+      </div>
+    </div>
+    <script src="editor.js"></script>
+  </body>
+</html> 

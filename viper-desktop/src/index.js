@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
+const fs = require('fs');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -52,21 +53,98 @@ app.on('window-all-closed', () => {
 // code. You can also put them in separate files and import them here.
 
 ipcMain.handle('choose-folder', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openDirectory']
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      console.warn('[choose-folder] User canceled or no folder selected');
+      return null;
+    }
+    console.log('[choose-folder] Folder selected:', result.filePaths[0]);
+    return result.filePaths[0];
+  } catch (err) {
+    console.error('[choose-folder] Error:', err);
+    return null;
+  }
 });
 
 ipcMain.handle('git-clone', async (_event, repoUrl, destPath) => {
+  console.log('[git-clone] Cloning repo:', repoUrl, 'to', destPath);
   return new Promise((resolve) => {
     exec(`git clone ${repoUrl} "${destPath}"`, (error, stdout, stderr) => {
       if (error) {
+        console.error('[git-clone] Error:', stderr || error.message);
         resolve({ success: false, error: stderr || error.message });
       } else {
+        console.log('[git-clone] Success:', stdout);
         resolve({ success: true, stdout });
       }
     });
   });
+});
+
+ipcMain.handle('open-file', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Verilog Files', extensions: ['v', 'sv'] }, { name: 'All Files', extensions: ['*'] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      console.warn('[open-file] User canceled or no file selected');
+      return null;
+    }
+    const filePath = result.filePaths[0];
+    console.log('[open-file] File selected:', filePath);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { filePath, content };
+  } catch (err) {
+    console.error('[open-file] Error:', err);
+    return null;
+  }
+});
+
+ipcMain.handle('save-file', async (_event, content) => {
+  try {
+    const result = await dialog.showSaveDialog({
+      filters: [{ name: 'Verilog Files', extensions: ['v', 'sv'] }, { name: 'All Files', extensions: ['*'] }]
+    });
+    if (result.canceled || !result.filePath) {
+      console.warn('[save-file] User canceled or no file path');
+      return { success: false };
+    }
+    fs.writeFileSync(result.filePath, content, 'utf-8');
+    console.log('[save-file] File saved:', result.filePath);
+    return { success: true, filePath: result.filePath };
+  } catch (err) {
+    console.error('[save-file] Error:', err);
+    return { success: false };
+  }
+});
+
+ipcMain.handle('read-dir', async (_event, dirPath) => {
+  console.log('[read-dir] Reading directory:', dirPath);
+  try {
+    const files = fs.readdirSync(dirPath, { withFileTypes: true });
+    console.log('[read-dir] Files found:', files.map(f => f.name));
+    return files.map(f => ({
+      name: f.name,
+      isDirectory: f.isDirectory(),
+      isFile: f.isFile()
+    }));
+  } catch (e) {
+    console.error('[read-dir] Error reading directory:', dirPath, e);
+    return [];
+  }
+});
+
+ipcMain.handle('open-file-from-path', async (_event, filePath) => {
+  try {
+    console.log('[open-file-from-path] Opening file:', filePath);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { content };
+  } catch (e) {
+    console.error('[open-file-from-path] Error opening file:', filePath, e);
+    return { content: '' };
+  }
 });

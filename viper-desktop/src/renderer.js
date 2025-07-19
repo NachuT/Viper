@@ -3,10 +3,14 @@ window.onload = function() {
   const cloneGitBtn = document.getElementById('clone-git');
   const gitUrlInput = document.getElementById('git-url');
   const statusDiv = document.getElementById('status');
+  const selectedFolderDiv = document.getElementById('selected-folder');
 
   openFolderBtn.onclick = async () => {
     const folder = await window.electronAPI.chooseFolder();
-    if (folder) statusDiv.textContent = 'Selected folder: ' + folder;
+    if (folder) {
+      localStorage.setItem('viper-selected-folder', folder);
+      window.location = 'editor.html';
+    }
   };
 
   cloneGitBtn.onclick = async () => {
