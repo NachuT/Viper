@@ -5,20 +5,163 @@
     <title>Viper Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-      #editor { height: 70vh; width: 100%; border-radius: 0.5rem; }
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'JetBrains Mono', monospace;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+      }
+      #viper-app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+      }
+      .top-bar {
+        height: 2.5rem;
+        background: #23272e;
+        color: #7fff7f;
+        display: flex;
+        align-items: center;
+        padding-left: 1.5rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid #22262c;
+        user-select: none;
+      }
+      .main-area {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        min-width: 0;
+      }
+      #sidebar {
+        width: 240px;
+        min-width: 180px;
+        max-width: 320px;
+        background: #23272e;
+        border-right: 1px solid #22262c;
+        overflow-y: auto;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .sidebar-header {
+        padding: 1rem 1rem 0.5rem 1rem;
+        font-weight: bold;
+        color: #7fff7f;
+        font-size: 1rem;
+        letter-spacing: 0.03em;
+      }
+      #file-list {
+        flex: 1;
+        padding: 0.5rem 0.5rem 1rem 1rem;
+        margin: 0;
+        list-style: none;
+        overflow-x: hidden;
+      }
+      #file-list li {
+        transition: background 0.2s, color 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+        padding-right: 8px;
+        border-radius: 4px;
+      }
+      #file-list li:hover {
+        background: #31363f;
+        color: #7fff7f;
+      }
+      #file-list li.selected {
+        background: #232a36;
+        color: #00ff99;
+        font-weight: bold;
+      }
+      .tab-bar {
+        display: flex;
+        align-items: center;
+        background: #23272e;
+        border-bottom: 1px solid #22262c;
+        height: 2.5rem;
+        padding-left: 0.5rem;
+        overflow-x: auto;
+        min-width: 0;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        padding: 0 1rem;
+        height: 2.5rem;
+        color: #d4d4d4;
+        background: none;
+        border: none;
+        border-right: 1px solid #22262c;
+        cursor: pointer;
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+        transition: background 0.2s, color 0.2s;
+      }
+      .tab.active {
+        background: #1e1e1e;
+        color: #7fff7f;
+        font-weight: bold;
+      }
+      .tab .close {
+        margin-left: 0.5rem;
+        color: #888;
+        font-size: 1.1em;
+        cursor: pointer;
+      }
+      .tab .close:hover {
+        color: #ff5c5c;
+      }
+      #editor {
+        height: 100%;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+      }
+      .editor-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        background: #1e1e1e;
+      }
     </style>
   </head>
-  <body class="bg-gray-900 text-white flex flex-col items-center min-h-screen">
-    <div class="flex flex-col items-center w-full py-8">
-      <img src="darklogo.png" alt="Viper Logo" class="w-16 h-16 mb-2" />
-      <h1 class="text-3xl font-extrabold mb-4">Viper</h1>
-      <div class="w-full max-w-6xl bg-gray-800 rounded-lg shadow-lg p-0 flex min-h-[60vh]">
-        <div id="sidebar" class="w-64 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
-          <div class="font-bold text-green-400 mb-2">Project Files</div>
-          <ul id="file-list" class="text-sm"></ul>
+  <body>
+    <div id="viper-app">
+      <div class="top-bar">Viper</div>
+      <div class="main-area">
+        <div id="sidebar">
+          <div class="sidebar-header">Project Files</div>
+          <ul id="file-list"></ul>
         </div>
-        <div class="flex-1 p-6">
+        <div class="editor-container">
+          <div class="tab-bar" id="tab-bar" style="position:relative;">
+            <button id="syntax-check-btn" style="position:absolute;right:0;top:0;height:100%;background:none;border:none;outline:none;cursor:pointer;display:flex;align-items:center;padding:0 1.2rem;">
+              <svg width="22" height="22" fill="none" stroke="#7fff7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.7 6.3a2.5 2.5 0 0 1 3.5 3.5l-1.1 1.1-3.5-3.5 1.1-1.1zm-2.1 2.1l3.5 3.5-7.6 7.6c-.4.4-1 .4-1.4 0l-2.1-2.1c-.4-.4-.4-1 0-1.4l7.6-7.6z"></path></svg>
+            </button>
+          </div>
+          <div id="syntax-check-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ff5c5c;"></div>
           <div id="editor"></div>
         </div>
       </div>

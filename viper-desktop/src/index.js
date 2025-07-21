@@ -148,3 +148,26 @@ ipcMain.handle('open-file-from-path', async (_event, filePath) => {
     return { content: '' };
   }
 });
+
+ipcMain.handle('save-file-direct', async (_event, filePath, content) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    console.log('[save-file-direct] File saved:', filePath);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('[save-file-direct] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('verilog-syntax-check', async (_event, filePath) => {
+  return new Promise((resolve) => {
+    exec(`iverilog -tnull "${filePath}"`, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+});
