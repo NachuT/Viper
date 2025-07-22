@@ -1,6 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const pty = require('node-pty');
@@ -230,4 +230,52 @@ ipcMain.handle('verilog-syntax-check', async (_event, filePath) => {
       }
     });
   });
+});
+
+// Bitstream generation handler
+ipcMain.handle('generate-bitstream', async (event, tool, projectDir) => {
+  function sendProgress(progress) {
+    event.sender.send('bitstream-progress', progress);
+  }
+  // 1. Scan for files
+  function scanFiles(dir) {
+    let results = [];
+    const list = fs.readdirSync(dir, { withFileTypes: true });
+    for (const f of list) {
+      const fullPath = path.join(dir, f.name);
+      if (f.isDirectory()) {
+        results = results.concat(scanFiles(fullPath));
+      } else {
+        results.push(fullPath);
+      }
+    }
+    return results;
+  }
+  const allFiles = scanFiles(projectDir);
+  // 2. Tool-specific checks
+  const fileTypes = {
+    yosys: ['.v', '.sv', '.json', '.pcf'],
+    quartus: ['.qsf', '.v', '.sv', '.sdc'],
+    vivado: ['.xdc', '.v', '.sv', '.tcl']
+  };
+  const required = fileTypes[tool] || [];
+  const found = required.filter(ext => allFiles.some(f => f.endsWith(ext)));
+  if (found.length < required.length) {
+    sendProgress({ error: `Missing required files for ${tool.toUpperCase()}: ${required.filter(ext => !found.includes(ext)).join(', ')}` });
+    return;
+  }
+  // 3. Run toolchain command (simulate for now)
+  let percent = 0;
+  let eta = 10;
+  sendProgress({ log: `Starting ${tool.toUpperCase()}...`, percent, eta: eta + 's' });
+  const interval = setInterval(() => {
+    percent += Math.floor(Math.random() * 8) + 3;
+    eta -= 1;
+    if (percent > 100) percent = 100;
+    sendProgress({ log: `Running ${tool.toUpperCase()}...`, percent, eta: eta > 0 ? eta + 's' : '<1s' });
+    if (percent >= 100) {
+      clearInterval(interval);
+      sendProgress({ log: `${tool.toUpperCase()} complete!`, percent: 100, eta: 'Done!', done: true, bitstreamPath: path.join(projectDir, 'build', 'output.bit') });
+    }
+  }, 700);
 });

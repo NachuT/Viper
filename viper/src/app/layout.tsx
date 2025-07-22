@@ -31,6 +31,23 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <footer
+          style={{
+            width: '100vw',
+            background: '#23272e',
+            color: '#888',
+            textAlign: 'center',
+            fontSize: '0.95rem',
+            padding: '1.2rem 0',
+            borderTop: '1px solid #22262c',
+            position: 'fixed',
+            left: 0,
+            bottom: 0,
+            zIndex: 1000,
+          }}
+        >
+          Note: Currently, this tool only supports bitstream generation for <b>Lattice iCE40 FPGAs</b>.
+        </footer>
       </body>
     </html>
   );

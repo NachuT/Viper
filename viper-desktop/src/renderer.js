@@ -64,4 +64,25 @@ window.onload = function() {
       }
     };
   }
+
+
+  const toolchainBanner = document.getElementById('toolchain-banner');
+  const toolchainInstructions = document.getElementById('toolchain-instructions');
+  const copyToolchainCmd = document.getElementById('copy-toolchain-cmd');
+  const toolchainCmdBox = document.getElementById('toolchain-cmd-box');
+  let toolchainCmd = '';
+  const platform = (typeof process !== 'undefined' && process.platform) ? process.platform : navigator.platform;
+  if (platform.startsWith('Win') || platform === 'win32') {
+    toolchainCmd = 'pacman -Syu\npacman -S mingw-w64-x86_64-yosys mingw-w64-x86_64-icestorm mingw-w64-x86_64-nextpnr-ice40';
+    toolchainInstructions.textContent = 'On Windows (MSYS2): Install MSYS2, then run if you haven\'t already:';
+  } else if (platform === 'darwin' || platform.toLowerCase().includes('mac')) {
+    toolchainCmd = 'brew tap cloud-v/icestorm\nbrew install yosys icestorm nextpnr-ice40';
+    toolchainInstructions.textContent = 'On macOS: Run this if you haven\'t already:';
+  }
+  toolchainCmdBox.value = toolchainCmd;
+  copyToolchainCmd.onclick = () => {
+    navigator.clipboard.writeText(toolchainCmd);
+    copyToolchainCmd.textContent = 'Copied!';
+    setTimeout(() => { copyToolchainCmd.textContent = 'Copy Command'; }, 1500);
+  };
 }; 

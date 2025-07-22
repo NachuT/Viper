@@ -7,7 +7,7 @@ function getTab(filePath) {
 }
 
 function createFileTree(container, folderPath, files, depth = 0, showAll = false) {
-  // Sort: folders first, then files, both alphabetically
+ 
   files.sort((a, b) => {
     if (a.isDirectory && !b.isDirectory) return -1;
     if (!a.isDirectory && b.isDirectory) return 1;
@@ -230,13 +230,92 @@ window.saveActiveFile = saveActiveFile;
 window.onload = async function() {
   const folderPath = localStorage.getItem('viper-selected-folder');
   const fileList = document.getElementById('file-list');
+  // --- Top Search Bar Elements ---
+  const topSearchBar = document.getElementById('top-search-bar');
+  const searchInput = document.getElementById('search-input');
+  const searchResults = document.getElementById('search-results');
+  let allFilesFlat = [];
+  let searchActive = false;
+
   if (folderPath) {
     const files = await window.electronAPI.readDir(folderPath);
     fileList.innerHTML = '';
     createFileTree(fileList, folderPath, files);
+    // Recursively flatten all files for search
+    async function flattenFiles(dir, files) {
+      let out = [];
+      for (const f of files) {
+        if (f.isDirectory) {
+          const subFiles = await window.electronAPI.readDir(dir + '/' + f.name);
+          out = out.concat(await flattenFiles(dir + '/' + f.name, subFiles));
+        } else {
+          out.push({ filePath: dir + '/' + f.name, fileName: f.name });
+        }
+      }
+      return out;
+    }
+    allFilesFlat = await flattenFiles(folderPath, files);
   } else {
     fileList.innerHTML = '<li class="text-red-400">No folder selected</li>';
   }
+
+
+
+  searchInput && searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    searchResults.innerHTML = '';
+    if (!q) { searchResults.style.display = 'none'; return; }
+    let results = [];
+    if (q.startsWith('>')) {
+      // Command mode (basic demo)
+      const commands = [
+        { label: 'Toggle Terminal', action: () => document.getElementById('toggle-terminal-btn').click() },
+        { label: 'New File (not implemented)', action: () => {} },
+      ];
+      results = commands.filter(cmd => cmd.label.toLowerCase().includes(q.slice(1).toLowerCase()));
+      results.forEach((cmd, i) => {
+        const li = document.createElement('li');
+        li.textContent = cmd.label;
+        li.className = 'px-2 py-1 rounded hover:bg-gray-700 cursor-pointer';
+        li.onclick = () => { cmd.action(); searchResults.style.display = 'none'; };
+        searchResults.appendChild(li);
+      });
+      searchResults.style.display = results.length ? 'block' : 'none';
+      return;
+    }
+    // File search
+    results = allFilesFlat.filter(f => f.fileName.toLowerCase().includes(q.toLowerCase()));
+    results.slice(0, 20).forEach((f, i) => {
+      const li = document.createElement('li');
+      li.textContent = f.fileName + ' — ' + f.filePath;
+      li.className = 'px-2 py-1 rounded hover:bg-gray-700 cursor-pointer';
+      li.onclick = () => {
+        openFileTab(f.filePath, f.fileName);
+        searchResults.style.display = 'none';
+      };
+      searchResults.appendChild(li);
+    });
+    searchResults.style.display = results.length ? 'block' : 'none';
+  });
+  // Keyboard navigation (basic)
+  searchInput && searchInput.addEventListener('keydown', (e) => {
+    const items = Array.from(searchResults.children);
+    let idx = items.findIndex(li => li.classList.contains('selected'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (idx >= 0) items[idx].classList.remove('selected');
+      idx = Math.min(idx + 1, items.length - 1);
+      if (items[idx]) items[idx].classList.add('selected');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx >= 0) items[idx].classList.remove('selected');
+      idx = Math.max(idx - 1, 0);
+      if (items[idx]) items[idx].classList.add('selected');
+    } else if (e.key === 'Enter' && idx >= 0) {
+      e.preventDefault();
+      items[idx].click();
+    }
+  });
 
   // Only use require() for Monaco
   require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
@@ -490,5 +569,126 @@ window.onload = async function() {
         triggerCharacters: ['.', ':', ' ', '_']
       });
     });
+
+    const generateBitstreamBtn = document.getElementById('generate-bitstream-btn');
+    const bitstreamModal = document.getElementById('bitstream-modal');
+    const closeBitstreamModal = document.getElementById('close-bitstream-modal');
+    const bitstreamToolBtns = document.getElementsByClassName('bitstream-tool-btn');
+    let bitstreamResultDiv = null;
+
+    if (generateBitstreamBtn) {
+      generateBitstreamBtn.onclick = () => {
+        bitstreamModal.style.display = 'flex';
+      };
+    }
+    if (closeBitstreamModal) {
+      closeBitstreamModal.onclick = () => {
+        bitstreamModal.style.display = 'none';
+      };
+    }
+
+    // Progress modal for bitstream generation
+    let progressModal = null;
+    function showProgressModal(tool) {
+      if (!progressModal) {
+        progressModal = document.createElement('div');
+        progressModal.id = 'progress-modal';
+        progressModal.style.position = 'fixed';
+        progressModal.style.left = '0';
+        progressModal.style.top = '0';
+        progressModal.style.width = '100vw';
+        progressModal.style.height = '100vh';
+        progressModal.style.background = '#000a';
+        progressModal.style.zIndex = '3000';
+        progressModal.style.display = 'flex';
+        progressModal.style.alignItems = 'center';
+        progressModal.style.justifyContent = 'center';
+        progressModal.innerHTML = `
+          <div style="background:#23272e; border-radius:8px; box-shadow:0 4px 24px #000a; padding:2rem; min-width:320px; display:flex; flex-direction:column; align-items:center;">
+            <div id="progress-spinner" style="margin-bottom:1.5rem;">
+              <svg width="48" height="48" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="#7ecfff" stroke-width="6" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="0"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>
+            </div>
+            <div id="progress-label" style="color:#ffb86c; font-size:1.1rem; margin-bottom:0.5rem;">Generating bitstream with <b>${tool.toUpperCase()}</b>...</div>
+            <div id="progress-percent" style="color:#7ecfff; font-size:1.2rem; margin-bottom:0.5rem;">0%</div>
+            <div id="progress-eta" style="color:#d4d4d4; font-size:1rem;">ETA: --s</div>
+          </div>
+        `;
+        document.body.appendChild(progressModal);
+      } else {
+        progressModal.querySelector('#progress-label').innerHTML = `Generating bitstream with <b>${tool.toUpperCase()}</b>...`;
+        progressModal.querySelector('#progress-percent').textContent = '0%';
+        progressModal.querySelector('#progress-eta').textContent = 'ETA: --s';
+        progressModal.style.display = 'flex';
+      }
+    }
+    function hideProgressModal() {
+      if (progressModal) progressModal.style.display = 'none';
+    }
+
+    Array.from(bitstreamToolBtns).forEach(btn => {
+      btn.onclick = async () => {
+        bitstreamModal.style.display = 'none';
+        const tool = btn.getAttribute('data-tool');
+        showProgressModal(tool);
+        // Save all open/dirty files first
+        for (const tab of openTabs) {
+          if (tab.dirty) {
+            await window.electronAPI.saveFileDirect(tab.filePath, tab.model.getValue());
+          }
+        }
+        // Request backend to generate bitstream
+        const projectDir = localStorage.getItem('viper-selected-folder');
+        window.electronAPI.generateBitstream(tool, projectDir, (progress) => {
+          // progress: { percent, eta, log, error, done, bitstreamPath }
+          if (progress.error) {
+            progressModal.querySelector('#progress-label').textContent = 'Error: ' + progress.error;
+            progressModal.querySelector('#progress-percent').textContent = '';
+            progressModal.querySelector('#progress-eta').textContent = '';
+            setTimeout(() => { hideProgressModal(); }, 3000);
+            return;
+          }
+          if (progress.log) {
+            progressModal.querySelector('#progress-label').textContent = progress.log;
+          }
+          if (typeof progress.percent === 'number') {
+            progressModal.querySelector('#progress-percent').textContent = progress.percent + '%';
+          }
+          if (progress.eta) {
+            progressModal.querySelector('#progress-eta').textContent = 'ETA: ' + progress.eta;
+          }
+          if (progress.done) {
+            progressModal.querySelector('#progress-label').textContent = 'Bitstream generated: ' + (progress.bitstreamPath || 'unknown');
+            progressModal.querySelector('#progress-percent').textContent = '100%';
+            progressModal.querySelector('#progress-eta').textContent = 'Done!';
+            setTimeout(() => { hideProgressModal(); }, 3500);
+          }
+        });
+      };
+    });
+
+    // --- Toolchain Banner Logic ---
+    const toolchainBanner = document.getElementById('toolchain-banner');
+    const toolchainInstructions = document.getElementById('toolchain-instructions');
+    const copyToolchainCmd = document.getElementById('copy-toolchain-cmd');
+    let toolchainCmd = '';
+    function detectOS() {
+      const platform = (typeof process !== 'undefined' && process.platform) ? process.platform : navigator.platform;
+      if (platform.startsWith('Win') || platform === 'win32') {
+        toolchainCmd = 'pacman -Syu\npacman -S mingw-w64-x86_64-yosys mingw-w64-x86_64-icestorm mingw-w64-x86_64-nextpnr-ice40';
+        toolchainInstructions.textContent = 'On Windows (MSYS2): Install MSYS2, then run:';
+      } else if (platform === 'darwin' || platform.toLowerCase().includes('mac')) {
+        toolchainCmd = 'brew install yosys icestorm nextpnr-ice40';
+        toolchainInstructions.textContent = 'On macOS: Run this in your terminal:';
+      } else {
+        toolchainCmd = 'sudo apt install yosys icestorm nextpnr-ice40';
+        toolchainInstructions.textContent = 'On Linux: Run this in your terminal:';
+      }
+    }
+    detectOS();
+    copyToolchainCmd.onclick = () => {
+      navigator.clipboard.writeText(toolchainCmd);
+      copyToolchainCmd.textContent = 'Copied!';
+      setTimeout(() => { copyToolchainCmd.textContent = 'Copy Command'; }, 1500);
+    };
   });
 }; 
