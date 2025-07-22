@@ -6,8 +6,19 @@ function getTab(filePath) {
   return openTabs.find(t => t.filePath === filePath);
 }
 
-function createFileTree(container, folderPath, files) {
-  files.forEach(f => {
+function createFileTree(container, folderPath, files, depth = 0, showAll = false) {
+  // Sort: folders first, then files, both alphabetically
+  files.sort((a, b) => {
+    if (a.isDirectory && !b.isDirectory) return -1;
+    if (!a.isDirectory && b.isDirectory) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const MAX_ITEMS = 20;
+  const shouldCompress = !showAll && files.length > MAX_ITEMS;
+  const filesToShow = shouldCompress ? files.slice(0, MAX_ITEMS) : files;
+
+  filesToShow.forEach(f => {
     const li = document.createElement('li');
     li.className = 'py-1 px-2 rounded hover:bg-gray-700 cursor-pointer flex items-center';
     li.title = f.name;
@@ -15,6 +26,10 @@ function createFileTree(container, folderPath, files) {
     li.style.overflow = 'hidden';
     li.style.textOverflow = 'ellipsis';
     li.style.whiteSpace = 'nowrap';
+    // Dotfiles/folders: de-emphasize
+    if (f.name.startsWith('.')) {
+      li.style.opacity = '0.6';
+    }
     if (f.isDirectory) {
       li.innerHTML = `<span class="mr-1">📁</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:170px;vertical-align:middle;">${f.name}</span>`;
       li.onclick = async (e) => {
@@ -27,13 +42,16 @@ function createFileTree(container, folderPath, files) {
           li.classList.add('expanded');
           const subPath = folderPath + '/' + f.name;
           const subFiles = await window.electronAPI.readDir(subPath);
-          console.log('Subfolder:', subPath, subFiles);
           const ul = document.createElement('ul');
           ul.className = 'ml-4';
-          createFileTree(ul, subPath, subFiles);
+          createFileTree(ul, subPath, subFiles, depth + 1);
           li.appendChild(ul);
         }
       };
+      // Collapse .git and other dotfolders by default
+      if (f.name.startsWith('.')) {
+        li.classList.add('collapsed');
+      }
     } else {
       const filePath = folderPath + '/' + f.name;
       const tab = openTabs.find(t => t.filePath === filePath);
@@ -48,6 +66,17 @@ function createFileTree(container, folderPath, files) {
     }
     container.appendChild(li);
   });
+
+  if (shouldCompress) {
+    const moreLi = document.createElement('li');
+    moreLi.className = 'py-1 px-2 rounded hover:bg-gray-700 cursor-pointer flex items-center text-blue-400';
+    moreLi.textContent = `Show ${files.length - MAX_ITEMS} more...`;
+    moreLi.onclick = () => {
+      container.innerHTML = '';
+      createFileTree(container, folderPath, files, depth, true);
+    };
+    container.appendChild(moreLi);
+  }
 }
 
 function highlightSidebarFile(filePath) {
@@ -107,7 +136,24 @@ async function openFileTab(filePath, fileName) {
     else if (fileName.toLowerCase().endsWith('.v')) language = 'verilog';
     else language = 'plaintext';
     const { content } = await window.electronAPI.openFileFromPath(filePath);
-    tab = { filePath, fileName, content, savedContent: content, dirty: false, language };
+    
+    const model = monaco.editor.createModel(content, language);
+    tab = { 
+      filePath, 
+      fileName, 
+      savedContent: content, 
+      dirty: false, 
+      language, 
+      model,
+      listener: null
+    };
+
+    tab.listener = model.onDidChangeContent(() => {
+      tab.dirty = model.getValue() !== tab.savedContent;
+      renderTabs();
+      highlightSidebarFile(filePath);
+    });
+
     openTabs.push(tab);
   }
   setActiveTab(filePath);
@@ -118,16 +164,8 @@ function setActiveTab(filePath) {
   renderTabs();
   const tab = openTabs.find(t => t.filePath === filePath);
   if (tab && monacoEditor) {
-    monacoEditor.setValue(tab.content);
-    monaco.editor.setModelLanguage(monacoEditor.getModel(), tab.language || 'plaintext');
+    monacoEditor.setModel(tab.model);
     monacoEditor.updateOptions({ readOnly: false });
-    if (monacoEditor._viperListener) monacoEditor._viperListener.dispose();
-    monacoEditor._viperListener = monacoEditor.onDidChangeModelContent(() => {
-      const current = monacoEditor.getValue();
-      tab.dirty = current !== tab.savedContent;
-      tab.content = current;
-      renderTabs();
-    });
   }
   highlightSidebarFile(filePath);
 }
@@ -135,17 +173,23 @@ function setActiveTab(filePath) {
 function closeTab(filePath) {
   const idx = openTabs.findIndex(t => t.filePath === filePath);
   if (idx !== -1) {
+    const tabToClose = openTabs[idx];
+    if (tabToClose.model) tabToClose.model.dispose();
+    if (tabToClose.listener) tabToClose.listener.dispose();
+
     openTabs.splice(idx, 1);
     if (activeTab === filePath) {
       if (openTabs.length > 0) {
         setActiveTab(openTabs[Math.max(0, idx - 1)].filePath);
       } else {
         activeTab = null;
-        if (monacoEditor) monacoEditor.setValue('// Start coding Verilog here!\n');
+        if (monacoEditor) {
+          monacoEditor.setModel(null);
+          monacoEditor.setValue('// Start coding Verilog here!\n');
+        }
       }
-    } else {
-      renderTabs();
     }
+    renderTabs();
   }
 }
 
@@ -153,11 +197,12 @@ async function saveActiveFile() {
   if (!activeTab) return;
   const tab = openTabs.find(t => t.filePath === activeTab);
   if (!tab) return;
-  const content = monacoEditor ? monacoEditor.getValue() : tab.content;
+  const content = tab.model.getValue();
   await window.electronAPI.saveFileDirect(tab.filePath, content);
   tab.savedContent = content;
   tab.dirty = false;
   renderTabs();
+  highlightSidebarFile(tab.filePath);
   const tabBar = document.getElementById('tab-bar');
   const tabEls = tabBar.querySelectorAll('.tab');
   tabEls.forEach(el => {
@@ -187,16 +232,19 @@ window.onload = async function() {
   const fileList = document.getElementById('file-list');
   if (folderPath) {
     const files = await window.electronAPI.readDir(folderPath);
-    console.log('Root folder:', folderPath, files);
     fileList.innerHTML = '';
     createFileTree(fileList, folderPath, files);
   } else {
     fileList.innerHTML = '<li class="text-red-400">No folder selected</li>';
   }
 
+  // Only use require() for Monaco
   require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
-  require(['vs/editor/editor.main'], function () {
-   
+  require(['vs/editor/editor.main'], function (monaco) {
+    // Use global Terminal and FitAddon from UMD bundles
+    const Terminal = window.Terminal;
+    const FitAddon = window.FitAddon.FitAddon || window.FitAddon;
+
     if (!monaco.languages.getLanguages().some(lang => lang.id === 'verilog')) {
       monaco.languages.register({ id: 'verilog' });
     }
@@ -296,6 +344,124 @@ window.onload = async function() {
       }).observe(editorContainer);
     }
 
+    // Add Verilog syntax check functionality
+    const syntaxCheckBtn = document.getElementById('syntax-check-btn');
+    const syntaxCheckResult = document.getElementById('syntax-check-result');
+
+    if (syntaxCheckBtn && syntaxCheckResult) {
+      syntaxCheckResult.style.whiteSpace = 'pre-wrap';
+      syntaxCheckResult.style.wordBreak = 'break-all';
+      syntaxCheckResult.style.cursor = 'pointer';
+
+      syntaxCheckBtn.onclick = async () => {
+        if (!activeTab) {
+          syntaxCheckResult.textContent = 'No active file selected.';
+          syntaxCheckResult.style.color = '#ffcc00'; // A warning-yellow color
+          setTimeout(() => { syntaxCheckResult.textContent = ''; }, 3000);
+          return;
+        }
+
+        await saveActiveFile();
+
+        const filePath = activeTab;
+        syntaxCheckResult.textContent = 'Checking syntax...';
+        syntaxCheckResult.style.color = '#d4d4d4'; // A neutral-gray color
+
+        const result = await window.electronAPI.verilogSyntaxCheck(filePath);
+
+        if (result.success) {
+          syntaxCheckResult.textContent = 'Syntax OK';
+          syntaxCheckResult.style.color = '#7fff7f'; // A success-green color
+          setTimeout(() => { syntaxCheckResult.textContent = ''; }, 3000);
+        } else {
+          syntaxCheckResult.textContent = result.error;
+          syntaxCheckResult.style.color = '#ff5c5c'; // A failure-red color
+        }
+      };
+      
+      syntaxCheckResult.onclick = () => {
+        syntaxCheckResult.textContent = '';
+      };
+    }
+
+    // Terminal Logic
+    const terminalContainer = document.getElementById('terminal-container');
+    const terminalEl = document.getElementById('terminal');
+    const closeTerminalBtn = document.getElementById('close-terminal-btn');
+    const toggleTerminalBtn = document.getElementById('toggle-terminal-btn');
+    const clearTerminalBtn = document.getElementById('clear-terminal-btn');
+    let term = null;
+    let fitAddon = null;
+
+    function toggleTerminal(visible) {
+      if (visible) {
+        terminalContainer.style.display = 'block';
+        if (!term) {
+          term = new Terminal({
+            cursorBlink: true,
+            theme: {
+              background: '#1e1e1e',
+              foreground: '#d4d4d4',
+              cursor: '#7fff7f',
+            }
+          });
+          const FitAddonClass = window.FitAddon.FitAddon || window.FitAddon;
+          fitAddon = new FitAddonClass();
+          term.loadAddon(fitAddon);
+          term.open(terminalEl);
+          term.writeln('\x1b[36mType commands here. Press the remove icon to clear.\x1b[0m');
+          window.electronAPI.termSpawn({
+            shell: 'zsh',
+            cols: term.cols,
+            rows: term.rows,
+            cwd: folderPath || process.env.HOME
+          });
+
+          fitAddon.fit();
+          
+          term.onData(data => window.electronAPI.termWrite(data));
+          window.electronAPI.onTermData(data => term.write(data));
+          window.electronAPI.onTermExit(() => {
+            term.dispose();
+            term = null;
+            fitAddon = null;
+            terminalContainer.style.display = 'none';
+          });
+        }
+        setTimeout(() => term && term.focus(), 100);
+      } else {
+        terminalContainer.style.display = 'none';
+      }
+    }
+
+    if (toggleTerminalBtn) {
+      toggleTerminalBtn.onclick = () => {
+        const isVisible = terminalContainer.style.display === 'block';
+        toggleTerminal(!isVisible);
+      };
+    }
+
+    closeTerminalBtn.onclick = () => toggleTerminal(false);
+    
+    if (clearTerminalBtn) {
+      clearTerminalBtn.onclick = () => {
+        if (term) {
+          term.clear();
+          term.writeln('\x1b[36mType commands here. Press the broom icon to clear.\x1b[0m');
+        }
+      };
+    }
+    
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => {
+        if (terminalContainer.style.display === 'block' && fitAddon) {
+          fitAddon.fit();
+          const { cols, rows } = term;
+          window.electronAPI.termResize({ cols, rows });
+        }
+      }).observe(terminalContainer);
+    }
+    
     const verilogKeywords = [
       'module', 'endmodule', 'input', 'output', 'inout', 'wire', 'reg', 'logic', 'always', 'always_comb', 'always_ff', 'always_latch', 'begin', 'end', 'if', 'else', 'case', 'endcase', 'for', 'while', 'repeat', 'forever', 'assign', 'function', 'endfunction', 'task', 'endtask', 'parameter', 'localparam', 'generate', 'endgenerate', 'genvar', 'initial', 'posedge', 'negedge', 'or', 'and', 'not', 'xor', 'nand', 'nor', 'xnor', 'default', 'disable', 'fork', 'join', 'wait', 'return', 'integer', 'real', 'time', 'signed', 'unsigned', 'typedef', 'enum', 'struct', 'union', 'package', 'import', 'export', 'virtual', 'interface', 'modport', 'ref', 'const', 'static', 'automatic', 'string', 'event', 'cell', 'config', 'design', 'library', 'use', 'include', 'define', 'ifdef', 'ifndef', 'endif', 'elsif', 'undef', 'timescale', 'do', 'break', 'continue', 'assert', 'cover', 'property', 'sequence', 'endproperty', 'endsequence', 'clocking', 'rand', 'randc', 'constraint', 'solve', 'before', 'inside', 'dist', 'unique', 'priority', 'randcase', 'randsequence', 'expect', 'covergroup', 'endgroup', 'coverpoint', 'cross', 'bins', 'illegal_bins', 'ignore_bins', 'wildcard', 'with', 'matches', 'intersect', 'throughout', 'first_match', 'nexttime', 's_nexttime', 'eventually', 's_eventually', 'until', 'until_with', 'implies', 'iff', 'accept_on', 'reject_on', 'sync_accept_on', 'sync_reject_on', 'restrict', 'let'
     ];

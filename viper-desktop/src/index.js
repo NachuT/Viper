@@ -2,6 +2,8 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const pty = require('node-pty');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -49,8 +51,66 @@ app.on('window-all-closed', () => {
   }
 });
 
+app.on('before-quit', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+});
+
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
+const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+let ptyProcess;
+
+ipcMain.handle('term:spawn', (event, { cols, rows, cwd, shell: shellOverride }) => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  const useShell = shellOverride || (os.platform() === 'win32' ? 'powershell.exe' : 'bash');
+  ptyProcess = pty.spawn(useShell, [], {
+    name: 'xterm-color',
+    cols: cols || 80,
+    rows: rows || 24,
+    cwd: cwd || process.env.HOME,
+    env: process.env
+  });
+
+  const window = BrowserWindow.fromWebContents(event.sender);
+  
+  ptyProcess.onData(data => {
+    if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
+      window.webContents.send('term:data', data);
+    }
+  });
+  
+  ptyProcess.onExit(() => {
+    ptyProcess = null;
+    if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
+      window.webContents.send('term:exit');
+    }
+  });
+
+  return { pid: ptyProcess.pid };
+});
+
+ipcMain.on('term:write', (_event, data) => {
+  if (ptyProcess) {
+    ptyProcess.write(data);
+  }
+});
+
+ipcMain.on('term:resize', (_event, { cols, rows }) => {
+  if (ptyProcess) {
+    ptyProcess.resize(cols, rows);
+  }
+});
+
+ipcMain.on('term:kill', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
+  }
+});
 
 ipcMain.handle('choose-folder', async () => {
   try {
