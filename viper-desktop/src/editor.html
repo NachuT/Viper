@@ -152,19 +152,20 @@
   </head>
   <body>
     <div id="viper-app">
-      <div id="toolchain-banner" style="background:#23272e; color:#ffb86c; border-bottom:1px solid #444b55; padding:1.2rem 2rem; display:flex; align-items:center; justify-content:space-between;">
-        <div>
-          <b>FPGA Toolchain Setup:</b>
-          <span id="toolchain-instructions">Detecting your OS...</span>
-        </div>
-        <button id="copy-toolchain-cmd" style="background:#31363f; color:#fff; border:none; border-radius:4px; font-size:1rem; padding:0.5rem 1.2rem; margin-left:1.5rem; cursor:pointer;">Copy Command</button>
-      </div>
       <div id="top-search-bar" style="position:relative; width:100vw; background:#23272e; border-bottom:1px solid #22262c; z-index:1000; display:flex; align-items:center; height:44px; padding:0 1.5rem;">
         <svg width="20" height="20" fill="none" stroke="#444b55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" style="margin-right:0.75rem;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="search-input" type="text" placeholder="Search files, symbols, or type > for commands..." style="width:100%; background:#23272e; color:#d4d4d4; border:none; outline:none; font-size:1.1rem; padding:0.5rem 0; border-radius:4px;" autocomplete="off" />
         <ul id="search-results" style="position:absolute; left:50%; top:44px; transform:translateX(-50%); background:#23272e; border-radius:0 0 8px 8px; box-shadow:0 4px 24px #000a; margin:0; padding:0.5rem 0 0 0; list-style:none; max-height:260px; overflow-y:auto; width:480px; display:none;"></ul>
       </div>
       <div class="top-bar">Viper</div>
+      <!-- FPGA Toolchain Setup (Apio) -->
+      <div id="apio-toolchain-banner" style="background:#23272e; color:#7ecfff; border-bottom:1px solid #444b55; padding:1.2rem 2rem; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <b>FPGA Toolchain Setup (Recommended):</b>
+          <span>Install <a href="https://github.com/FPGAwars/apio" target="_blank" style="color:#7ecfff;text-decoration:underline;">Apio</a> for a one-command iCE40 toolchain:</span>
+          <pre style="background:#181c22;color:#fff;padding:0.5em 1em;border-radius:4px;display:inline-block;margin:0 1em;">pip3 install --upgrade pip &amp;&amp; pip3 install apio &amp;&amp; apio install --all</pre>
+        </div>
+      </div>
       <div class="main-area" style="flex: 1; display: flex; flex-direction: column;">
         <div style="flex: 1; display: flex; min-height: 0;">
           <div id="sidebar">
@@ -183,12 +184,13 @@
                 <button id="toggle-terminal-btn" title="Toggle Terminal" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
                   <svg width="22" height="22" fill="none" stroke="#7ecfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 19v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
-                <button id="generate-bitstream-btn" title="Generate Bitstream" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
-                  <svg width="22" height="22" fill="none" stroke="#ffb86c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 2v20M5 12h14"/></svg>
+                <button id="bitstream-btn" title="Build Bitstream" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
+                  <svg width="22" height="22" fill="none" stroke="#ffb86c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
                 </button>
               </div>
             </div>
             <div id="syntax-check-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ff5c5c;"></div>
+            <div id="bitstream-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ffb86c;"></div>
             <div id="editor" style="flex: 1; min-height: 0;"></div>
           </div>
         </div>

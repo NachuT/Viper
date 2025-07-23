@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bitstream Generation</title>
+  <script src="generation.js"></script>
+  <style>
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 3rem auto;
+      background: #23272e;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px #000a;
+      padding: 2rem 2.5rem;
+    }
+    h1 {
+      color: #ffb86c;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1.2rem;
+      margin-bottom: 0.5rem;
+      color: #7ecfff;
+    }
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 0.5rem;
+      border-radius: 4px;
+      border: none;
+      background: #181c22;
+      color: #fff;
+      font-size: 1rem;
+    }
+    button {
+      margin-top: 2rem;
+      width: 100%;
+      background: #ffb86c;
+      color: #23272e;
+      border: none;
+      border-radius: 4px;
+      font-size: 1.1rem;
+      padding: 0.8rem 0;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    button:disabled {
+      background: #444b55;
+      color: #888;
+      cursor: not-allowed;
+    }
+    button:hover:enabled {
+      background: #ffd9a0;
+    }
+    .result {
+      margin-top: 2rem;
+      min-height: 2rem;
+      font-size: 1rem;
+      color: #7fff7f;
+      text-align: center;
+    }
+    .step {
+      display: none;
+    }
+    .step.active {
+      display: block;
+    }
+    .step-label {
+      font-size: 1.1rem;
+      color: #ffb86c;
+      margin-bottom: 0.5rem;
+      margin-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bitstream Generation</h1>
+    <form id="generation-form">
+      <div class="step step-1 active">
+        <div class="step-label">Step 1: Select Project Folder</div>
+        <input type="text" id="folder-input" readonly placeholder="Select project folder..." />
+        <button type="button" id="pick-folder-btn">Pick Folder</button>
+        <button type="button" id="next-to-file" disabled>Next</button>
+      </div>
+      <div class="step step-2">
+        <div class="step-label">Step 2: Select Top Verilog File</div>
+        <input type="text" id="file-input" readonly placeholder="Select top Verilog file..." />
+        <button type="button" id="pick-file-btn">Pick File</button>
+        <button type="button" id="next-to-module" disabled>Next</button>
+      </div>
+      <div class="step step-3">
+        <div class="step-label">Step 3: Enter Top Module Name</div>
+        <input type="text" id="module-input" placeholder="Enter top module name..." />
+        <button type="submit" id="build-btn">Build Bitstream</button>
+      </div>
+    </form>
+    <div class="result" id="build-result"></div>
+  </div>
+</body>
+</html> 

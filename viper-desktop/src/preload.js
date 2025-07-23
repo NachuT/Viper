@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFileFromPath: (filePath) => ipcRenderer.invoke('open-file-from-path', filePath),
   saveFileDirect: (filePath, content) => ipcRenderer.invoke('save-file-direct', filePath, content),
   verilogSyntaxCheck: (filePath) => ipcRenderer.invoke('verilog-syntax-check', filePath),
+  generateBitstream: (filePath) => ipcRenderer.invoke('generate-bitstream', filePath),
+  chooseFile: (options) => ipcRenderer.invoke('choose-file', options),
+  apioBuild: (params) => ipcRenderer.invoke('apio-build', params),
 
   // Terminal APIs
   termSpawn: (options) => ipcRenderer.invoke('term:spawn', options),

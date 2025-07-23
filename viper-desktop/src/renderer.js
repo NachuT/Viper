@@ -1,4 +1,5 @@
 window.onload = function() {
+  console.log("window.onload fired");
   const openFolderBtn = document.getElementById('open-folder');
   const cloneGitBtn = document.getElementById('clone-git');
   const gitUrlInput = document.getElementById('git-url');
@@ -64,7 +65,6 @@ window.onload = function() {
       }
     };
   }
-
 
   const toolchainBanner = document.getElementById('toolchain-banner');
   const toolchainInstructions = document.getElementById('toolchain-instructions');

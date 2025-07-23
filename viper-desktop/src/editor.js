@@ -570,102 +570,6 @@ window.onload = async function() {
       });
     });
 
-    const generateBitstreamBtn = document.getElementById('generate-bitstream-btn');
-    const bitstreamModal = document.getElementById('bitstream-modal');
-    const closeBitstreamModal = document.getElementById('close-bitstream-modal');
-    const bitstreamToolBtns = document.getElementsByClassName('bitstream-tool-btn');
-    let bitstreamResultDiv = null;
-
-    if (generateBitstreamBtn) {
-      generateBitstreamBtn.onclick = () => {
-        bitstreamModal.style.display = 'flex';
-      };
-    }
-    if (closeBitstreamModal) {
-      closeBitstreamModal.onclick = () => {
-        bitstreamModal.style.display = 'none';
-      };
-    }
-
-    // Progress modal for bitstream generation
-    let progressModal = null;
-    function showProgressModal(tool) {
-      if (!progressModal) {
-        progressModal = document.createElement('div');
-        progressModal.id = 'progress-modal';
-        progressModal.style.position = 'fixed';
-        progressModal.style.left = '0';
-        progressModal.style.top = '0';
-        progressModal.style.width = '100vw';
-        progressModal.style.height = '100vh';
-        progressModal.style.background = '#000a';
-        progressModal.style.zIndex = '3000';
-        progressModal.style.display = 'flex';
-        progressModal.style.alignItems = 'center';
-        progressModal.style.justifyContent = 'center';
-        progressModal.innerHTML = `
-          <div style="background:#23272e; border-radius:8px; box-shadow:0 4px 24px #000a; padding:2rem; min-width:320px; display:flex; flex-direction:column; align-items:center;">
-            <div id="progress-spinner" style="margin-bottom:1.5rem;">
-              <svg width="48" height="48" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="#7ecfff" stroke-width="6" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="0"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>
-            </div>
-            <div id="progress-label" style="color:#ffb86c; font-size:1.1rem; margin-bottom:0.5rem;">Generating bitstream with <b>${tool.toUpperCase()}</b>...</div>
-            <div id="progress-percent" style="color:#7ecfff; font-size:1.2rem; margin-bottom:0.5rem;">0%</div>
-            <div id="progress-eta" style="color:#d4d4d4; font-size:1rem;">ETA: --s</div>
-          </div>
-        `;
-        document.body.appendChild(progressModal);
-      } else {
-        progressModal.querySelector('#progress-label').innerHTML = `Generating bitstream with <b>${tool.toUpperCase()}</b>...`;
-        progressModal.querySelector('#progress-percent').textContent = '0%';
-        progressModal.querySelector('#progress-eta').textContent = 'ETA: --s';
-        progressModal.style.display = 'flex';
-      }
-    }
-    function hideProgressModal() {
-      if (progressModal) progressModal.style.display = 'none';
-    }
-
-    Array.from(bitstreamToolBtns).forEach(btn => {
-      btn.onclick = async () => {
-        bitstreamModal.style.display = 'none';
-        const tool = btn.getAttribute('data-tool');
-        showProgressModal(tool);
-        // Save all open/dirty files first
-        for (const tab of openTabs) {
-          if (tab.dirty) {
-            await window.electronAPI.saveFileDirect(tab.filePath, tab.model.getValue());
-          }
-        }
-        // Request backend to generate bitstream
-        const projectDir = localStorage.getItem('viper-selected-folder');
-        window.electronAPI.generateBitstream(tool, projectDir, (progress) => {
-          // progress: { percent, eta, log, error, done, bitstreamPath }
-          if (progress.error) {
-            progressModal.querySelector('#progress-label').textContent = 'Error: ' + progress.error;
-            progressModal.querySelector('#progress-percent').textContent = '';
-            progressModal.querySelector('#progress-eta').textContent = '';
-            setTimeout(() => { hideProgressModal(); }, 3000);
-            return;
-          }
-          if (progress.log) {
-            progressModal.querySelector('#progress-label').textContent = progress.log;
-          }
-          if (typeof progress.percent === 'number') {
-            progressModal.querySelector('#progress-percent').textContent = progress.percent + '%';
-          }
-          if (progress.eta) {
-            progressModal.querySelector('#progress-eta').textContent = 'ETA: ' + progress.eta;
-          }
-          if (progress.done) {
-            progressModal.querySelector('#progress-label').textContent = 'Bitstream generated: ' + (progress.bitstreamPath || 'unknown');
-            progressModal.querySelector('#progress-percent').textContent = '100%';
-            progressModal.querySelector('#progress-eta').textContent = 'Done!';
-            setTimeout(() => { hideProgressModal(); }, 3500);
-          }
-        });
-      };
-    });
-
     // --- Toolchain Banner Logic ---
     const toolchainBanner = document.getElementById('toolchain-banner');
     const toolchainInstructions = document.getElementById('toolchain-instructions');
@@ -691,4 +595,11 @@ window.onload = async function() {
       setTimeout(() => { copyToolchainCmd.textContent = 'Copy Command'; }, 1500);
     };
   });
+  const bitstreamBtn = document.getElementById('bitstream-btn');
+  if (bitstreamBtn) {
+    bitstreamBtn.onclick = () => {
+      const folder = localStorage.getItem('viper-selected-folder') || '';
+      window.location = `generation.html${folder ? '?folder=' + encodeURIComponent(folder) : ''}`;
+    };
+  }
 }; 

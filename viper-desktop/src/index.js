@@ -4,6 +4,7 @@ const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const pty = require('node-pty');
+const fsPromises = fs.promises;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -232,50 +233,60 @@ ipcMain.handle('verilog-syntax-check', async (_event, filePath) => {
   });
 });
 
-// Bitstream generation handler
-ipcMain.handle('generate-bitstream', async (event, tool, projectDir) => {
-  function sendProgress(progress) {
-    event.sender.send('bitstream-progress', progress);
-  }
-  // 1. Scan for files
-  function scanFiles(dir) {
-    let results = [];
-    const list = fs.readdirSync(dir, { withFileTypes: true });
-    for (const f of list) {
-      const fullPath = path.join(dir, f.name);
-      if (f.isDirectory()) {
-        results = results.concat(scanFiles(fullPath));
-      } else {
-        results.push(fullPath);
-      }
+ipcMain.handle('choose-file', async (_event, options) => {
+  const result = await dialog.showOpenDialog({
+    title: options?.title || 'Select File',
+    defaultPath: options?.defaultPath,
+    filters: options?.filters,
+    properties: options?.properties || ['openFile']
+  });
+  return result.filePaths;
+});
+
+ipcMain.handle('apio-build', async (_event, { projectDir, topFile, topModule }) => {
+  try {
+    // 1. Update or create apio.ini
+    const apioIniPath = path.join(projectDir, 'apio.ini');
+    let iniContent = '';
+    try {
+      iniContent = await fsPromises.readFile(apioIniPath, 'utf8');
+    } catch (e) {
+      // File does not exist, create new
+      iniContent = '[project]\n';
     }
-    return results;
-  }
-  const allFiles = scanFiles(projectDir);
-  // 2. Tool-specific checks
-  const fileTypes = {
-    yosys: ['.v', '.sv', '.json', '.pcf'],
-    quartus: ['.qsf', '.v', '.sv', '.sdc'],
-    vivado: ['.xdc', '.v', '.sv', '.tcl']
-  };
-  const required = fileTypes[tool] || [];
-  const found = required.filter(ext => allFiles.some(f => f.endsWith(ext)));
-  if (found.length < required.length) {
-    sendProgress({ error: `Missing required files for ${tool.toUpperCase()}: ${required.filter(ext => !found.includes(ext)).join(', ')}` });
-    return;
-  }
-  // 3. Run toolchain command (simulate for now)
-  let percent = 0;
-  let eta = 10;
-  sendProgress({ log: `Starting ${tool.toUpperCase()}...`, percent, eta: eta + 's' });
-  const interval = setInterval(() => {
-    percent += Math.floor(Math.random() * 8) + 3;
-    eta -= 1;
-    if (percent > 100) percent = 100;
-    sendProgress({ log: `Running ${tool.toUpperCase()}...`, percent, eta: eta > 0 ? eta + 's' : '<1s' });
-    if (percent >= 100) {
-      clearInterval(interval);
-      sendProgress({ log: `${tool.toUpperCase()} complete!`, percent: 100, eta: 'Done!', done: true, bitstreamPath: path.join(projectDir, 'build', 'output.bit') });
+    // Remove any existing 'top =' and 'src =' lines
+    iniContent = iniContent.replace(/^top\s*=.*$/m, '').replace(/^src\s*=.*$/m, '');
+    // Add correct lines
+    const relTopFile = path.relative(projectDir, topFile);
+    iniContent = iniContent.replace(/\[project\][^\[]*/, `[project]\ntop = ${topModule}\nsrc = ${relTopFile}\n`);
+    if (!iniContent.includes('[project]')) {
+      iniContent = `[project]\ntop = ${topModule}\nsrc = ${relTopFile}\n` + iniContent;
     }
-  }, 700);
+    if (!iniContent.includes('[env]')) {
+      iniContent = iniContent.trim() + '\n[env]\n';
+    }
+    await fsPromises.writeFile(apioIniPath, iniContent, 'utf8');
+
+    // 2. Run 'apio build' in the project directory
+    return await new Promise((resolve) => {
+      const build = spawn('apio', ['build'], { cwd: projectDir });
+      let output = '';
+      let error = '';
+      build.stdout.on('data', (data) => { output += data.toString(); });
+      build.stderr.on('data', (data) => { error += data.toString(); });
+      build.on('close', (code) => {
+        if (code === 0) {
+          // Try to find the .bin file
+          fsPromises.readdir(projectDir).then(files => {
+            const bin = files.find(f => f.endsWith('.bin'));
+            resolve({ success: true, bitstream: bin ? path.join(projectDir, bin) : null, output });
+          });
+        } else {
+          resolve({ success: false, error: error || output || 'apio build failed.' });
+        }
+      });
+    });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
