@@ -320,6 +320,8 @@ window.onload = async function() {
   // Only use require() for Monaco
   require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
   require(['vs/editor/editor.main'], function (monaco) {
+    // Place terminalBuffer at the top of this function
+    let terminalBuffer = '';
     // Use global Terminal and FitAddon from UMD bundles
     const Terminal = window.Terminal;
     const FitAddon = window.FitAddon.FitAddon || window.FitAddon;
@@ -499,12 +501,28 @@ window.onload = async function() {
           fitAddon.fit();
           
           term.onData(data => window.electronAPI.termWrite(data));
-          window.electronAPI.onTermData(data => term.write(data));
+          window.electronAPI.onTermData(data => {
+            if (term) term.write(data);
+            terminalBuffer += data;
+            // Check for shell prompt (e.g., ends with %  or $ )
+            if (/^[^\n]*[\$%] $/m.test(terminalBuffer.split('\n').pop() || '')) {
+              refreshFileTree();
+            }
+            // Prevent buffer from growing indefinitely
+            if (terminalBuffer.length > 1000) terminalBuffer = terminalBuffer.slice(-1000);
+          });
           window.electronAPI.onTermExit(() => {
             term.dispose();
             term = null;
             fitAddon = null;
             terminalContainer.style.display = 'none';
+            // Refresh project file tree after terminal closes
+            if (folderPath) {
+              window.electronAPI.readDir(folderPath).then(files => {
+                fileList.innerHTML = '';
+                createFileTree(fileList, folderPath, files);
+              });
+            }
           });
         }
         setTimeout(() => term && term.focus(), 100);
@@ -594,6 +612,15 @@ window.onload = async function() {
       copyToolchainCmd.textContent = 'Copied!';
       setTimeout(() => { copyToolchainCmd.textContent = 'Copy Command'; }, 1500);
     };
+
+    function refreshFileTree() {
+      if (folderPath) {
+        window.electronAPI.readDir(folderPath).then(files => {
+          fileList.innerHTML = '';
+          createFileTree(fileList, folderPath, files);
+        });
+      }
+    }
   });
   const bitstreamBtn = document.getElementById('bitstream-btn');
   if (bitstreamBtn) {

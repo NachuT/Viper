@@ -10,22 +10,35 @@
     <h1 class="text-4xl font-extrabold mb-6">Viper</h1>
     <button id="open-folder" class="bg-green-500 text-white px-6 py-3 rounded-xl font-bold mb-4">Open Folder</button>
     <div id="selected-folder" class="text-green-400 font-mono mb-4" style="display:none;"></div>
-    <div class="flex gap-2 mb-4">
-      <input id="git-url" type="text" placeholder="Git repo URL" class="px-3 py-2 rounded border border-gray-700 bg-gray-800 text-white" />
-      <button id="clone-git" class="bg-green-500 text-white px-4 py-2 rounded font-bold">Clone from Git</button>
-    </div>
+    <!-- Remove the Git repo URL input and Clone from Git button -->
     <div id="status" class="mt-2"></div>
-    <div id="toolchain-banner" style="background:#23272e; color:#ffb86c; border-bottom:1px solid #444b55; padding:1.2rem 2rem; display:flex; align-items:center; justify-content:space-between;">
-      <div>
-        <b>FPGA Toolchain Setup:</b>
-        <span id="toolchain-instructions">Detecting your OS...</span>
-        <input id="toolchain-cmd-box" type="text" readonly style="margin-left:1.5rem; background:#1e1e1e; color:#fff; border:1px solid #444b55; border-radius:4px; font-size:1rem; padding:0.5rem 1.2rem; width:420px;" />
+    <!-- FPGA Toolchain Setup (Recommended) -->
+    <div id="apio-toolchain-banner" style="background:#23272e; color:#ffb86c; border:1px solid #ffb86c; border-radius:8px; padding:1.2rem 2rem; max-width:700px; margin:2rem auto 0 auto; text-align:center;">
+      <div style="width:100%;">
+        <b>FPGA Toolchain Setup (Recommended):</b>
+        <span>Install <a href="https://github.com/FPGAwars/apio" target="_blank" style="color:#ffb86c;text-decoration:underline;">Apio</a> for the iCE40 toolchain:</span>
+        <div style="display:flex;align-items:center;justify-content:center;gap:1em;">
+          <pre id="apio-toolchain-cmd" style="background:#181c22;color:#fff;padding:0.5em 1em;border-radius:4px;display:block;margin:1em 0;overflow-x:auto;">pip3 install --upgrade pip && pip3 install apio && apio install --all</pre>
+          <button id="copy-apio-toolchain-cmd" style="background:#23272e;color:#ffb86c;border:1px solid #ffb86c;border-radius:6px;padding:0.5em 1.2em;cursor:pointer;font-size:1rem;transition:background 0.2s;">Copy</button>
+        </div>
       </div>
-      <button id="copy-toolchain-cmd" style="background:#31363f; color:#fff; border:none; border-radius:4px; font-size:1rem; padding:0.5rem 1.2rem; margin-left:1.5rem; cursor:pointer;">Copy Command</button>
     </div>
-    <footer style="width:100vw; background:#23272e; color:#888; text-align:center; font-size:0.95rem; padding:1.2rem 0; border-top:1px solid #22262c; margin-top:2rem;">
+    <footer style="background:#23272e; color:#888; text-align:center; font-size:0.95rem; padding:1.2rem 2.5rem; border-radius:8px; border:1px solid #22262c; max-width:600px; margin:2rem auto;">
       Note: Currently, this tool only supports bitstream generation for <b>Lattice iCE40 FPGAs</b>.
     </footer>
     <script src="renderer.js"></script>
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+  const copyBtn = document.getElementById('copy-apio-toolchain-cmd');
+  const pre = document.getElementById('apio-toolchain-cmd');
+  if (copyBtn && pre) {
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(pre.textContent.trim());
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+    };
+  }
+});
+</script>
   </body>
 </html>

@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   chooseFolder: () => ipcRenderer.invoke('choose-folder'),
-  gitClone: (repoUrl, destPath) => ipcRenderer.invoke('git-clone', repoUrl, destPath),
+  gitClone: ({ url, folder }) => ipcRenderer.invoke('git-clone', { url, folder }),
   openFile: () => ipcRenderer.invoke('open-file'),
   saveFile: (content) => ipcRenderer.invoke('save-file', content),
   readDir: (dirPath) => ipcRenderer.invoke('read-dir', dirPath),
@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateBitstream: (filePath) => ipcRenderer.invoke('generate-bitstream', filePath),
   chooseFile: (options) => ipcRenderer.invoke('choose-file', options),
   apioBuild: (params) => ipcRenderer.invoke('apio-build', params),
+  apioBoardList: () => ipcRenderer.invoke('apio-board-list'),
 
   // Terminal APIs
   termSpawn: (options) => ipcRenderer.invoke('term:spawn', options),

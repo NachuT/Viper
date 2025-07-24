@@ -130,19 +130,53 @@ ipcMain.handle('choose-folder', async () => {
   }
 });
 
-ipcMain.handle('git-clone', async (_event, repoUrl, destPath) => {
-  console.log('[git-clone] Cloning repo:', repoUrl, 'to', destPath);
-  return new Promise((resolve) => {
-    exec(`git clone ${repoUrl} "${destPath}"`, (error, stdout, stderr) => {
-      if (error) {
-        console.error('[git-clone] Error:', stderr || error.message);
-        resolve({ success: false, error: stderr || error.message });
-      } else {
-        console.log('[git-clone] Success:', stdout);
-        resolve({ success: true, stdout });
-      }
+ipcMain.handle('git-clone', async (_event, params) => {
+  try {
+    let repoUrl, targetDir;
+    if (typeof params === 'object' && params !== null) {
+      repoUrl = params.url;
+      targetDir = params.folder;
+    } else {
+      repoUrl = params;
+      targetDir = undefined;
+    }
+    if (!repoUrl || typeof repoUrl !== 'string' || !repoUrl.trim()) {
+      return { success: false, error: 'No repository URL provided.' };
+    }
+    if (!targetDir || typeof targetDir !== 'string' || !targetDir.trim()) {
+      return { success: false, error: 'No target directory provided.' };
+    }
+    // Check if directory is empty or contains only hidden files
+    const files = fs.readdirSync(targetDir);
+    const nonHidden = files.filter(f => !f.startsWith('.'));
+    if (nonHidden.length > 0) {
+      return { success: false, error: 'Selected directory is not empty.' };
+    }
+    // Remove all files (including hidden) from the directory
+    for (const f of files) {
+      const fullPath = path.join(targetDir, f);
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    }
+    // Log the git clone command for debugging
+    console.log('[git-clone] Running: git clone', repoUrl, 'in', targetDir);
+    // Run git clone into the selected directory
+    return await new Promise((resolve) => {
+      const git = spawn('git', ['clone', repoUrl, '.'], { cwd: targetDir });
+      let stdout = '';
+      let stderr = '';
+      git.stdout.on('data', data => { stdout += data.toString(); });
+      git.stderr.on('data', data => { stderr += data.toString(); });
+      git.on('close', code => {
+        if (code === 0) {
+          resolve({ success: true, stdout, folder: targetDir });
+        } else {
+          resolve({ success: false, error: stderr || stdout || 'git clone failed.' });
+        }
+      });
     });
-  });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
 
 ipcMain.handle('open-file', async () => {
@@ -243,28 +277,11 @@ ipcMain.handle('choose-file', async (_event, options) => {
   return result.filePaths;
 });
 
-ipcMain.handle('apio-build', async (_event, { projectDir, topFile, topModule }) => {
+ipcMain.handle('apio-build', async (_event, { projectDir, topFile, topModule, board }) => {
   try {
-    // 1. Update or create apio.ini
+    // Always write a clean apio.ini with only [env] section
+    const iniContent = `[env]\nboard = ${board}\ntop-module = ${topModule}\n`;
     const apioIniPath = path.join(projectDir, 'apio.ini');
-    let iniContent = '';
-    try {
-      iniContent = await fsPromises.readFile(apioIniPath, 'utf8');
-    } catch (e) {
-      // File does not exist, create new
-      iniContent = '[project]\n';
-    }
-    // Remove any existing 'top =' and 'src =' lines
-    iniContent = iniContent.replace(/^top\s*=.*$/m, '').replace(/^src\s*=.*$/m, '');
-    // Add correct lines
-    const relTopFile = path.relative(projectDir, topFile);
-    iniContent = iniContent.replace(/\[project\][^\[]*/, `[project]\ntop = ${topModule}\nsrc = ${relTopFile}\n`);
-    if (!iniContent.includes('[project]')) {
-      iniContent = `[project]\ntop = ${topModule}\nsrc = ${relTopFile}\n` + iniContent;
-    }
-    if (!iniContent.includes('[env]')) {
-      iniContent = iniContent.trim() + '\n[env]\n';
-    }
     await fsPromises.writeFile(apioIniPath, iniContent, 'utf8');
 
     // 2. Run 'apio build' in the project directory
@@ -282,11 +299,28 @@ ipcMain.handle('apio-build', async (_event, { projectDir, topFile, topModule }) 
             resolve({ success: true, bitstream: bin ? path.join(projectDir, bin) : null, output });
           });
         } else {
-          resolve({ success: false, error: error || output || 'apio build failed.' });
+          resolve({
+            success: false,
+            error: error || output || 'apio build failed.',
+            output: output + error
+          });
         }
       });
     });
   } catch (e) {
     return { success: false, error: e.message };
   }
+});
+
+ipcMain.handle('apio-board-list', async () => {
+  return new Promise((resolve) => {
+    exec('apio boards --list', (error, stdout, stderr) => {
+      if (error) {
+        resolve([]);
+      } else {
+        const boards = stdout.split('\n').map(line => line.trim()).filter(Boolean);
+        resolve(boards);
+      }
+    });
+  });
 });
