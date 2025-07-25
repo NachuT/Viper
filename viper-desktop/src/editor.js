@@ -621,6 +621,176 @@ window.onload = async function() {
         });
       }
     }
+
+    // --- Horizontal Minimap Implementation ---
+    const minimapContainer = document.getElementById('minimap-container');
+    const minimapCanvas = document.getElementById('minimap-canvas');
+    console.log('[Minimap] minimapContainer:', minimapContainer);
+    console.log('[Minimap] minimapCanvas:', minimapCanvas);
+    let minimapDragging = false;
+    let minimapDragStartX = 0;
+    let minimapScrollStart = 0;
+    let minimapSmoothScroll = null;
+
+    // Syntax color mapping for minimap
+    const minimapTokenColors = {
+      'keyword': '#7fff7f',
+      'comment': '#5c6370',
+      'string': '#7ecfff',
+      'number': '#ffb86c',
+      'operator': '#f78c6c',
+      'identifier': '#d4d4d4',
+      'default': '#444b55',
+    };
+
+    function getDominantTokenType(tokens) {
+      if (!tokens || tokens.length === 0) return 'default';
+      // Count token types
+      const counts = {};
+      for (const t of tokens) {
+        const type = t.type || 'default';
+        counts[type] = (counts[type] || 0) + (t.endIndex - (t.startIndex || 0));
+      }
+      // Return the type with the most characters
+      let maxType = 'default', maxCount = 0;
+      for (const k in counts) {
+        if (counts[k] > maxCount) {
+          maxType = k;
+          maxCount = counts[k];
+        }
+      }
+      return maxType;
+    }
+
+    function renderMinimap() {
+      console.log('[Minimap] renderMinimap called');
+      if (!monacoEditor) { console.log('[Minimap] No monacoEditor'); return; }
+      if (!minimapCanvas) { console.log('[Minimap] No minimapCanvas'); return; }
+      const ctx = minimapCanvas.getContext('2d');
+      const model = monacoEditor.getModel();
+      if (!model) { console.log('[Minimap] No model'); return; }
+      const lines = model.getLinesContent();
+      const totalLines = lines.length;
+      // Set canvas width to match container
+      const containerWidth = minimapContainer ? minimapContainer.offsetWidth : 1000;
+      minimapCanvas.width = containerWidth;
+      const minimapWidth = minimapCanvas.width;
+      const minimapHeight = minimapCanvas.height;
+      console.log(`[Minimap] minimapWidth: ${minimapWidth}, minimapHeight: ${minimapHeight}, totalLines: ${totalLines}`);
+      ctx.clearRect(0, 0, minimapWidth, minimapHeight);
+      // Each vertical slice is a line
+      const sliceWidth = Math.max(1, Math.floor(minimapWidth / Math.max(totalLines, 1)));
+      for (let i = 0; i < totalLines; ++i) {
+        const x = i * sliceWidth;
+        // Get tokens for this line
+        let tokens = [];
+        try {
+          tokens = monaco.editor.tokenize(lines[i], model.getLanguageId())[0] || [];
+        } catch (e) { console.log('[Minimap] Tokenize error:', e); }
+        const dominantType = getDominantTokenType(tokens);
+        const color = minimapTokenColors[dominantType] || minimapTokenColors['default'];
+        ctx.fillStyle = color + '55'; // add alpha for minimap
+        ctx.fillRect(x, 0, sliceWidth, minimapHeight - 1);
+        // Optionally, draw a faint preview of code length
+        const codeLen = Math.min(lines[i].length, 80);
+        ctx.fillStyle = '#7ecfff33';
+        ctx.fillRect(x, 0, Math.max(2, Math.floor(codeLen / 2)), minimapHeight - 1);
+      }
+      // Draw viewport rectangle
+      const editor = monacoEditor;
+      const visibleRanges = editor.getVisibleRanges();
+      if (visibleRanges.length > 0) {
+        const startLine = visibleRanges[0].startLineNumber - 1;
+        const endLine = visibleRanges[0].endLineNumber - 1;
+        const x1 = startLine * sliceWidth;
+        const x2 = (endLine + 1) * sliceWidth;
+        ctx.strokeStyle = '#7fff7f';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x1, 1, x2 - x1, minimapHeight - 2);
+      }
+    }
+
+    // Sync minimap on editor changes
+    if (monacoEditor) {
+      monacoEditor.onDidChangeModelContent(() => { console.log('[Minimap] onDidChangeModelContent'); renderMinimap(); });
+      monacoEditor.onDidScrollChange(() => { console.log('[Minimap] onDidScrollChange'); renderMinimap(); });
+      monacoEditor.onDidLayoutChange(() => { console.log('[Minimap] onDidLayoutChange'); renderMinimap(); });
+      renderMinimap();
+    }
+
+    // Smooth scroll helper
+    function smoothScrollToLine(editor, targetLine) {
+      if (!editor) { console.log('[Minimap] smoothScrollToLine: no editor'); return; }
+      const model = editor.getModel();
+      if (!model) { console.log('[Minimap] smoothScrollToLine: no model'); return; }
+      const lineCount = model.getLineCount();
+      const editorHeight = editor.getLayoutInfo().height;
+      const lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
+      const targetScrollTop = Math.max(0, (targetLine - 1) * lineHeight - editorHeight / 2);
+      const startScrollTop = editor.getScrollTop();
+      const duration = 180;
+      const startTime = performance.now();
+      if (minimapSmoothScroll) cancelAnimationFrame(minimapSmoothScroll);
+      function animateScroll(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const scrollTop = startScrollTop + (targetScrollTop - startScrollTop) * t;
+        editor.setScrollTop(scrollTop);
+        if (t < 1) {
+          minimapSmoothScroll = requestAnimationFrame(animateScroll);
+        }
+      }
+      minimapSmoothScroll = requestAnimationFrame(animateScroll);
+    }
+
+    // Minimap scroll interaction (horizontal)
+    if (minimapCanvas) {
+      minimapCanvas.addEventListener('mousedown', (e) => {
+        minimapDragging = true;
+        minimapDragStartX = e.offsetX;
+        const editor = monacoEditor;
+        if (!editor) { console.log('[Minimap] mousedown: no editor'); return; }
+        const model = editor.getModel();
+        if (!model) { console.log('[Minimap] mousedown: no model'); return; }
+        const totalLines = model.getLineCount();
+        const minimapWidth = minimapCanvas.width;
+        const sliceWidth = Math.max(1, Math.floor(minimapWidth / Math.max(totalLines, 1)));
+        const clickedLine = Math.floor(e.offsetX / sliceWidth) + 1;
+        console.log('[Minimap] mousedown, clickedLine:', clickedLine);
+        smoothScrollToLine(editor, clickedLine);
+        minimapScrollStart = clickedLine;
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!minimapDragging) return;
+        const rect = minimapCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const editor = monacoEditor;
+        if (!editor) { console.log('[Minimap] mousemove: no editor'); return; }
+        const model = editor.getModel();
+        if (!model) { console.log('[Minimap] mousemove: no model'); return; }
+        const totalLines = model.getLineCount();
+        const minimapWidth = minimapCanvas.width;
+        const sliceWidth = Math.max(1, Math.floor(minimapWidth / Math.max(totalLines, 1)));
+        const targetLine = Math.floor(x / sliceWidth) + 1;
+        console.log('[Minimap] mousemove, targetLine:', targetLine);
+        smoothScrollToLine(editor, targetLine);
+      });
+      window.addEventListener('mouseup', () => {
+        minimapDragging = false;
+      });
+    } else {
+      console.log('[Minimap] minimapCanvas not found for event listeners');
+    }
+    // Resize minimap canvas on window resize
+    function resizeMinimapCanvas() {
+      if (!minimapCanvas) { console.log('[Minimap] resizeMinimapCanvas: no minimapCanvas'); return; }
+      const containerWidth = minimapContainer ? minimapContainer.offsetWidth : 1000;
+      minimapCanvas.width = containerWidth;
+      console.log('[Minimap] resizeMinimapCanvas, new width:', minimapCanvas.width);
+      renderMinimap();
+    }
+    window.addEventListener('resize', resizeMinimapCanvas);
+    resizeMinimapCanvas();
   });
   const bitstreamBtn = document.getElementById('bitstream-btn');
   if (bitstreamBtn) {
