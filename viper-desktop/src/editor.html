@@ -83,6 +83,9 @@
         max-width: 200px;
         padding-right: 8px;
         border-radius: 4px;
+        user-select: none;
+        cursor: pointer;
+        position: relative;
       }
       #file-list li:hover {
         background: #31363f;
@@ -92,6 +95,46 @@
         background: #232a36;
         color: #00ff99;
         font-weight: bold;
+      }
+      #file-list li.dragging {
+        opacity: 0.5;
+        background: #4ecdc4;
+      }
+      #file-list li.drag-over {
+        background: #4ecdc4;
+        border: 2px dashed #7fff7f;
+      }
+      .context-menu {
+        position: fixed;
+        background: #23272e;
+        border: 1px solid #22262c;
+        border-radius: 6px;
+        box-shadow: 0 4px 24px #000a;
+        padding: 0.5rem 0;
+        z-index: 10000;
+        min-width: 150px;
+        display: none;
+      }
+      .context-menu-item {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        color: #d4d4d4;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+      }
+      .context-menu-item:hover {
+        background: #31363f;
+        color: #7fff7f;
+      }
+      .context-menu-separator {
+        height: 1px;
+        background: #22262c;
+        margin: 0.25rem 0;
+      }
+      .context-menu-target {
+        background: #4ecdc4 !important;
+        color: #1e2127 !important;
+        border: 2px solid #7fff7f !important;
       }
       .tab-bar {
         display: flex;
@@ -154,65 +197,73 @@
     <div id="viper-app">
       <div id="top-search-bar" style="position:relative; width:100vw; background:#23272e; border-bottom:1px solid #22262c; z-index:1000; display:flex; align-items:center; height:44px; padding:0 1.5rem;">
         <svg width="20" height="20" fill="none" stroke="#444b55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" style="margin-right:0.75rem;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search-input" type="text" placeholder="Search files, symbols, or type > for commands..." style="width:100%; background:#23272e; color:#d4d4d4; border:none; outline:none; font-size:1.1rem; padding:0.5rem 0; border-radius:4px;" autocomplete="off" />
+        <input id="search-input" type="text" placeholder="Search files, symbols, or type > for commands, & for AI..." style="width:100%; background:#23272e; color:#d4d4d4; border:none; outline:none; font-size:1.1rem; padding:0.5rem 0; border-radius:4px;" autocomplete="off" />
         <ul id="search-results" style="position:absolute; left:50%; top:44px; transform:translateX(-50%); background:#23272e; border-radius:0 0 8px 8px; box-shadow:0 4px 24px #000a; margin:0; padding:0.5rem 0 0 0; list-style:none; max-height:260px; overflow-y:auto; width:480px; display:none;"></ul>
+      </div>
+      <div id="quick-answer-display" style="display:none; background:#1e2127; border-bottom:1px solid #22262c; padding:0.5rem 1.5rem; color:#4ecdc4; font-size:0.9rem; text-align:center; min-height:2rem; word-wrap:break-word; position:relative;">
+        <button id="close-quick-answer" style="position:absolute; top:0.5rem; right:1rem; background:none; border:none; color:#718096; cursor:pointer; font-size:1.2rem; padding:0; width:20px; height:20px; display:flex; align-items:center; justify-content:center;">&times;</button>
+        <div id="quick-answer-text"></div>
       </div>
       <div class="top-bar">Viper</div>
       <div class="main-area" style="flex: 1; display: flex; min-height: 0; min-width: 0;">
-        <div style="flex: 1; display: flex; min-height: 0;">
-          <div id="sidebar">
-            <div class="sidebar-header">Project Files</div>
-            <ul id="file-list"></ul>
+        <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 44px - 2.5rem);">
+          <div style="flex: 1; display: flex; min-height: 0;">
+            <div id="sidebar">
+              <div class="sidebar-header">Project Files</div>
+              <ul id="file-list"></ul>
+            </div>
+            <div class="editor-container" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #1e1e1e; height: 100%;">
+              <div class="top-controls" style="display: flex; align-items: center; background: #23272e; border-bottom: 1px solid #22262c; height: 2.5rem;">
+                <div class="tab-bar" id="tab-bar" style="flex-grow: 1; display: flex; overflow-x: auto; min-width: 0; padding-left: 0.5rem;"></div>
+                <div class="actions" style="padding: 0 1rem; display: flex; gap: 0.5rem;">
+                  <button id="syntax-check-btn" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
+                    <svg width="22" height="22" fill="none" stroke="#7fff7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.7 6.3a2.5 2.5 0 0 1 3.5 3.5l-1.1 1.1-3.5-3.5 1.1-1.1zm-2.1 2.1l3.5 3.5-7.6 7.6c-.4.4-1 .4-1.4 0l-2.1-2.1c-.4-.4-.4-1 0-1.4l7.6-7.6z"></path></svg>
+                  </button>
+                  <button id="toggle-terminal-btn" title="Toggle Terminal" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
+                    <svg width="22" height="22" fill="none" stroke="#7ecfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 19v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                  <button id="bitstream-btn" title="Build Bitstream" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
+                    <svg width="22" height="22" fill="none" stroke="#ffb86c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="syntax-check-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ff5c5c;"></div>
+              <div id="bitstream-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ffb86c;"></div>
+              <div id="editor" style="flex: 1; min-height: 0;"></div>
+            </div>
+            <div id="ai-sidebar" style="height:100%;width:300px;max-width:90vw;background:#23272e;border-left:1px solid #22262c;z-index:3000;box-shadow:-4px 0 24px #000a;display:flex;flex-direction:column;min-width:280px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0.8rem 1rem 0.4rem 1rem;border-bottom:1px solid #22262c;">
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                  <svg width="16" height="16" fill="none" stroke="#7fff7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  <span style="font-weight:bold;color:#7fff7f;font-size:1rem;">AI Assistant</span>
+                </div>
+              </div>
+              <div id="ai-chat-history" style="flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1em;"></div>
+              <form id="ai-chat-form" style="display:flex;gap:0.5em;padding:1rem 1rem 1.2rem 1rem;background:#23272e;">
+                <input id="ai-chat-input" type="text" placeholder="Ask anything..." autocomplete="off" style="flex:1;padding:0.6em 0.8em;border-radius:6px;border:1px solid #444b55;background:#1e2127;color:#d4d4d4;font-size:0.9rem;transition:all 0.2s ease;outline:none;" />
+                <button id="ai-chat-send" type="submit" style="background:#7fff7f;color:#23272e;font-weight:bold;border:none;border-radius:6px;padding:0.6em 1em;cursor:pointer;font-size:0.9rem;">Send</button>
+              </form>
+            </div>
           </div>
-          <div class="editor-container" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #1e1e1e;">
-            <div class="top-controls" style="display: flex; align-items: center; background: #23272e; border-bottom: 1px solid #22262c; height: 2.5rem;">
-              <div class="tab-bar" id="tab-bar" style="flex-grow: 1; display: flex; overflow-x: auto; min-width: 0; padding-left: 0.5rem;"></div>
-              <div class="actions" style="padding: 0 1rem; display: flex; gap: 0.5rem;">
-                <button id="syntax-check-btn" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
-                  <svg width="22" height="22" fill="none" stroke="#7fff7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14.7 6.3a2.5 2.5 0 0 1 3.5 3.5l-1.1 1.1-3.5-3.5 1.1-1.1zm-2.1 2.1l3.5 3.5-7.6 7.6c-.4.4-1 .4-1.4 0l-2.1-2.1c-.4-.4-.4-1 0-1.4l7.6-7.6z"></path></svg>
+          <div id="terminal-container" style="display: none; height: 250px; max-height: 40vh; background-color: #1e1e1e; border-top: 1px solid #22262c; overflow: hidden; resize: vertical; min-height: 50px;">
+            <div id="terminal-header" style="height: 25px; background-color: #23272e; color: #d4d4d4; padding: 0 1rem; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+              <span>Terminal</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button id="clear-terminal-btn" title="Clear Terminal" style="background: none; border: none; color: #7ecfff; cursor: pointer; font-size: 1.2em; display: flex; align-items: center;">
+                  <svg width="22" height="22" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="256" height="256" fill="none"/>
+                    <path d="M200 216c-16-40-48-40-72-40s-56 0-72 40" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M128 176V40" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M96 72l32-32 32 32" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
                 </button>
-                <button id="toggle-terminal-btn" title="Toggle Terminal" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
-                  <svg width="22" height="22" fill="none" stroke="#7ecfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 19v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                </button>
-                <button id="bitstream-btn" title="Build Bitstream" style="background: none; border: none; cursor: pointer; display: flex; align-items: center;">
-                  <svg width="22" height="22" fill="none" stroke="#ffb86c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-                </button>
+                <button id="close-terminal-btn" style="background: none; border: none; color: #d4d4d4; cursor: pointer;">&times;</button>
               </div>
             </div>
-            <div id="syntax-check-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ff5c5c;"></div>
-            <div id="bitstream-result" style="min-height:2rem;font-size:1rem;padding:0.5rem 1rem;color:#ffb86c;"></div>
-            <div id="minimap-container" style="width:100%;height:60px;min-height:40px;max-height:80px;background:#23272e;border-bottom:1px solid #22262c;display:flex;align-items:center;justify-content:center;">
-              <canvas id="minimap-canvas" width="1000" height="60" style="width:100%;height:100%;background:#23272e;"></canvas>
-            </div>
-            <div id="editor" style="flex: 1; min-height: 0;"></div>
+            <div id="terminal" style="height: calc(100% - 25px); width: 100%;"></div>
           </div>
-          <div id="ai-sidebar" style="height:100vh;width:360px;max-width:90vw;background:#23272e;border-left:1px solid #22262c;z-index:3000;box-shadow:-4px 0 24px #000a;display:flex;flex-direction:column;min-width:320px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.2rem 0.5rem 1.2rem;border-bottom:1px solid #22262c;">
-              <span style="font-weight:bold;color:#7fff7f;font-size:1.1rem;">AI Assistant</span>
-            </div>
-            <div id="ai-chat-history" style="flex:1;overflow-y:auto;padding:1.2rem;display:flex;flex-direction:column;gap:1.1em;"></div>
-            <form id="ai-chat-form" style="display:flex;gap:0.5em;padding:1.2rem 1.2rem 1.5rem 1.2rem;background:#23272e;">
-              <input id="ai-chat-input" type="text" placeholder="Ask anything..." autocomplete="off" style="flex:1;padding:0.7em 1em;border-radius:6px;border:1px solid #444b55;background:#181c22;color:#fff;font-size:1rem;" />
-              <button id="ai-chat-send" type="submit" style="background:#7fff7f;color:#23272e;font-weight:bold;border:none;border-radius:6px;padding:0.7em 1.2em;cursor:pointer;font-size:1rem;">Send</button>
-            </form>
-          </div>
-        </div>
-        <div id="terminal-container" style="display: none; height: 250px; background-color: #1e1e1e; border-top: 1px solid #22262c; overflow: hidden; resize: vertical; min-height: 50px;">
-          <div id="terminal-header" style="height: 25px; background-color: #23272e; color: #d4d4d4; padding: 0 1rem; display: flex; align-items: center; justify-content: space-between; user-select: none;">
-            <span>Terminal</span>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button id="clear-terminal-btn" title="Clear Terminal" style="background: none; border: none; color: #7ecfff; cursor: pointer; font-size: 1.2em; display: flex; align-items: center;">
-                <svg width="22" height="22" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="256" height="256" fill="none"/>
-                  <path d="M200 216c-16-40-48-40-72-40s-56 0-72 40" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M128 176V40" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M96 72l32-32 32 32" stroke="#7ecfff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-              <button id="close-terminal-btn" style="background: none; border: none; color: #d4d4d4; cursor: pointer;">&times;</button>
-            </div>
-          </div>
-          <div id="terminal" style="height: calc(100% - 25px); width: 100%;"></div>
         </div>
       </div>
     </div>
@@ -225,5 +276,30 @@
     </div>
     <script src="editor.js"></script>
     <script src="sidebar.js"></script>
+    <script src="file-manager.js"></script>
+    
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+      <div class="context-menu-item" data-action="rename">Rename</div>
+      <div class="context-menu-item" data-action="new-file">New File</div>
+      <div class="context-menu-item" data-action="new-folder">New Folder</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" data-action="delete">Delete</div>
+    </div>
+    
+    <!-- Custom Modal Dialogs -->
+    <div id="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000a; z-index:20000; align-items:center; justify-content:center;">
+      <div id="modal-content" style="background:#23272e; border-radius:8px; box-shadow:0 4px 24px #000a; padding:2rem; min-width:320px; max-width:500px; width:90%;">
+        <h3 id="modal-title" style="color:#7fff7f; font-size:1.2rem; margin-bottom:1rem; margin-top:0;">Modal Title</h3>
+        <div id="modal-body" style="margin-bottom:1.5rem;">
+          <div id="modal-message" style="color:#d4d4d4; margin-bottom:1rem;"></div>
+          <input id="modal-input" type="text" style="width:100%; padding:0.5rem; background:#1e2127; border:1px solid #444b55; border-radius:4px; color:#d4d4d4; font-size:1rem; box-sizing:border-box;" placeholder="Enter value...">
+        </div>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+          <button id="modal-cancel" style="padding:0.5rem 1rem; background:#31363f; color:#d4d4d4; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+          <button id="modal-confirm" style="padding:0.5rem 1rem; background:#7fff7f; color:#23272e; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Confirm</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html> 

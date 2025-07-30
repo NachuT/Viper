@@ -30,8 +30,13 @@ function createFileTree(container, folderPath, files, depth = 0, showAll = false
     if (f.name.startsWith('.')) {
       li.style.opacity = '0.6';
     }
+    
+    // Make items draggable
+    li.draggable = true;
+    
     if (f.isDirectory) {
       li.innerHTML = `<span class="mr-1">📁</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:170px;vertical-align:middle;">${f.name}</span>`;
+      li.dataset.filePath = folderPath + '/' + f.name;
       li.onclick = async (e) => {
         e.stopPropagation();
         if (li.classList.contains('expanded')) {
@@ -57,13 +62,26 @@ function createFileTree(container, folderPath, files, depth = 0, showAll = false
       const tab = openTabs.find(t => t.filePath === filePath);
       const dirtyDot = tab && tab.dirty ? '<span style="color:#ff5c5c;font-size:1.1em;margin-left:0.4em;">●</span>' : '';
       li.innerHTML = `<span class="mr-1">📄</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:140px;vertical-align:middle;">${f.name}</span>${dirtyDot}`;
+      li.dataset.filePath = filePath;
       li.onclick = async (e) => {
         e.stopPropagation();
         openFileTab(filePath, f.name);
         highlightSidebarFile(filePath);
       };
-      li.dataset.filePath = filePath;
     }
+    
+
+    li.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Context Menu] Right-clicked on:', li.dataset.filePath, li);
+      if (window.fileManager) {
+        window.fileManager.showContextMenu(e, li);
+      } else {
+        console.error('[Context Menu] File manager not available');
+      }
+    });
+    
     container.appendChild(li);
   });
 
@@ -227,6 +245,18 @@ window.getActiveFilePath = function() {
 };
 window.saveActiveFile = saveActiveFile;
 
+// Global function to refresh file tree
+window.refreshFileTree = async function() {
+  const folderPath = localStorage.getItem('viper-selected-folder');
+  const fileList = document.getElementById('file-list');
+  
+  if (folderPath) {
+    const files = await window.electronAPI.readDir(folderPath);
+    fileList.innerHTML = '';
+    createFileTree(fileList, folderPath, files);
+  }
+};
+
 window.onload = async function() {
   const folderPath = localStorage.getItem('viper-selected-folder');
   const fileList = document.getElementById('file-list');
@@ -267,17 +297,64 @@ window.onload = async function() {
     if (!q) { searchResults.style.display = 'none'; return; }
     let results = [];
     if (q.startsWith('>')) {
-      // Command mode (basic demo)
+
       const commands = [
         { label: 'Toggle Terminal', action: () => document.getElementById('toggle-terminal-btn').click() },
-        { label: 'New File (not implemented)', action: () => {} },
+        { label: 'New File', action: async () => {
+          const folderPath = localStorage.getItem('viper-selected-folder');
+          if (!folderPath) {
+            alert('No folder selected. Please select a project folder first.');
+            return;
+          }
+          
+
+          if (window.fileManager) {
+            const fileName = await window.fileManager.showModal('New File', 'Enter file name:');
+            if (fileName) {
+              try {
+                const result = await window.electronAPI.createFile(folderPath, fileName);
+                if (result.success) {
+        
+                  window.refreshFileTree();
+                  setTimeout(async () => {
+                    await openFileTab(result.filePath, fileName);
+                  }, 100);
+                } else {
+                  alert('Create file failed: ' + result.error);
+                }
+              } catch (error) {
+                console.error('Create file error:', error);
+                alert('Failed to create file: ' + error.message);
+              }
+            }
+          } else {
+            // Fallback to prompt if file manager not available
+            const fileName = prompt('Enter file name:');
+            if (fileName) {
+              try {
+                const result = await window.electronAPI.createFile(folderPath, fileName);
+                if (result.success) {
+                  window.refreshFileTree();
+                  setTimeout(async () => {
+                    await openFileTab(result.filePath, fileName);
+                  }, 100);
+                } else {
+                  alert('Create file failed: ' + result.error);
+                }
+              } catch (error) {
+                console.error('Create file error:', error);
+                alert('Failed to create file: ' + error.message);
+              }
+            }
+          }
+        }},
       ];
       results = commands.filter(cmd => cmd.label.toLowerCase().includes(q.slice(1).toLowerCase()));
       results.forEach((cmd, i) => {
         const li = document.createElement('li');
         li.textContent = cmd.label;
         li.className = 'px-2 py-1 rounded hover:bg-gray-700 cursor-pointer';
-        li.onclick = () => { cmd.action(); searchResults.style.display = 'none'; };
+        li.onclick = () => { cmd.action(); searchResults.style.display = 'none'; searchInput.value = ''; };
         searchResults.appendChild(li);
       });
       searchResults.style.display = results.length ? 'block' : 'none';
@@ -412,7 +489,14 @@ window.onload = async function() {
       language: 'verilog',
       theme: 'viper-verilog-dark',
       fontSize: 16,
-      minimap: { enabled: false }
+      minimap: { enabled: false },
+      minimapRenderCharacters: false,
+      minimapMaxColumn: 80,
+      minimapSide: 'right',
+      minimapSize: 'proportional',
+      minimapShowSlider: 'always',
+      minimapRenderWhitespace: 'none',
+      minimapRenderLineHighlight: false
     });
     renderTabs();
     window.addEventListener('resize', () => {
@@ -475,7 +559,9 @@ window.onload = async function() {
     let fitAddon = null;
 
     function toggleTerminal(visible) {
+      console.log('[Terminal] toggleTerminal called with visible:', visible);
       if (visible) {
+        console.log('[Terminal] Showing terminal');
         terminalContainer.style.display = 'block';
         if (!term) {
           term = new Terminal({
@@ -527,18 +613,30 @@ window.onload = async function() {
         }
         setTimeout(() => term && term.focus(), 100);
       } else {
+        console.log('[Terminal] Hiding terminal');
         terminalContainer.style.display = 'none';
       }
     }
 
     if (toggleTerminalBtn) {
+      console.log('[Terminal] Toggle button found');
       toggleTerminalBtn.onclick = () => {
         const isVisible = terminalContainer.style.display === 'block';
+        console.log('[Terminal] Toggle clicked, current visibility:', isVisible);
         toggleTerminal(!isVisible);
       };
+    } else {
+      console.log('[Terminal] Toggle button not found');
     }
 
-    closeTerminalBtn.onclick = () => toggleTerminal(false);
+    if (closeTerminalBtn) {
+      closeTerminalBtn.onclick = () => {
+        console.log('[Terminal] Close button clicked');
+        toggleTerminal(false);
+      };
+    } else {
+      console.log('[Terminal] Close button not found');
+    }
     
     if (clearTerminalBtn) {
       clearTerminalBtn.onclick = () => {
@@ -623,6 +721,7 @@ window.onload = async function() {
     }
 
     // --- Horizontal Minimap Implementation ---
+    console.log('[Minimap] Minimap code loaded');
     const minimapContainer = document.getElementById('minimap-container');
     const minimapCanvas = document.getElementById('minimap-canvas');
     console.log('[Minimap] minimapContainer:', minimapContainer);
@@ -671,30 +770,25 @@ window.onload = async function() {
       if (!model) { console.log('[Minimap] No model'); return; }
       const lines = model.getLinesContent();
       const totalLines = lines.length;
-      // Set canvas width to match container
       const containerWidth = minimapContainer ? minimapContainer.offsetWidth : 1000;
       minimapCanvas.width = containerWidth;
       const minimapWidth = minimapCanvas.width;
       const minimapHeight = minimapCanvas.height;
       console.log(`[Minimap] minimapWidth: ${minimapWidth}, minimapHeight: ${minimapHeight}, totalLines: ${totalLines}`);
       ctx.clearRect(0, 0, minimapWidth, minimapHeight);
-      // Each vertical slice is a line
       const sliceWidth = Math.max(1, Math.floor(minimapWidth / Math.max(totalLines, 1)));
       for (let i = 0; i < totalLines; ++i) {
         const x = i * sliceWidth;
-        // Get tokens for this line
         let tokens = [];
         try {
           tokens = monaco.editor.tokenize(lines[i], model.getLanguageId())[0] || [];
         } catch (e) { console.log('[Minimap] Tokenize error:', e); }
         const dominantType = getDominantTokenType(tokens);
-        const color = minimapTokenColors[dominantType] || minimapTokenColors['default'];
-        ctx.fillStyle = color + '55'; // add alpha for minimap
+        const color = minimapTokenColors[dominantType] || '#888888'; // fallback color
+        ctx.fillStyle = color + '55';
         ctx.fillRect(x, 0, sliceWidth, minimapHeight - 1);
-        // Optionally, draw a faint preview of code length
-        const codeLen = Math.min(lines[i].length, 80);
-        ctx.fillStyle = '#7ecfff33';
-        ctx.fillRect(x, 0, Math.max(2, Math.floor(codeLen / 2)), minimapHeight - 1);
+        // Log each line's color
+        if (i < 10) console.log(`[Minimap] Line ${i}: color=${ctx.fillStyle}, tokens=`, tokens);
       }
       // Draw viewport rectangle
       const editor = monacoEditor;
@@ -791,7 +885,118 @@ window.onload = async function() {
     }
     window.addEventListener('resize', resizeMinimapCanvas);
     resizeMinimapCanvas();
+
+
   });
+  
+
+  function removeContentBetweenKeywords(text, startKeyword, endKeyword) {
+
+    const escapedStartKeyword = startKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedEndKeyword = endKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const regex = new RegExp(`(${escapedStartKeyword}).*?(${escapedEndKeyword})`, 's');
+
+
+    return text.replace(regex, '$1$2');
+  }
+
+  const aiSearchInput = document.getElementById('search-input');
+  const quickAnswerDisplay = document.getElementById('quick-answer-display');
+  const quickAnswerText = document.getElementById('quick-answer-text');
+  const closeQuickAnswer = document.getElementById('close-quick-answer');
+
+  console.log('[AI Command] Looking for elements:', { 
+    searchInput: !!aiSearchInput, 
+    quickAnswerDisplay: !!quickAnswerDisplay,
+    quickAnswerText: !!quickAnswerText,
+    closeQuickAnswer: !!closeQuickAnswer
+  });
+
+  if (aiSearchInput && quickAnswerDisplay && quickAnswerText && closeQuickAnswer) {
+    console.log('[AI Command] System initialized');
+    
+    closeQuickAnswer.addEventListener('click', () => {
+      quickAnswerDisplay.style.display = 'none';
+    });
+    
+    aiSearchInput.addEventListener('keypress', async (e) => {
+      console.log('[AI Command] Keypress event:', e.key);
+      if (e.key === 'Enter') {
+        const query = aiSearchInput.value.trim();
+        console.log('[AI Command] Query:', query);
+        
+        if (query.startsWith('&')) {
+          e.preventDefault();
+          const question = query.substring(1).trim(); 
+          
+          if (question) {
+            console.log('[AI Command] Sending question:', question);
+            
+          
+            aiSearchInput.value = '';
+            
+   
+            quickAnswerText.textContent = 'Thinking...';
+            quickAnswerDisplay.style.display = 'block';
+            quickAnswerText.style.color = '#ffb86c';
+            
+            try {
+              const response = await fetch('https://ai.hackclub.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  messages: [{
+                    role: 'user',
+                    content: `You are Viper an IDE specifically designed to make fpga bistream easier uisng AI. Answer "${question}" in 1 sentence and if that isn't possible say "Sorry, please ask in the larger AI area" verbatim.`
+                  }]
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+
+              const data = await response.json();
+              let answer = data.choices?.[0]?.message?.content || 'Sorry, please ask in the larger AI area';
+              
+
+             
+              answer = answer.replace(/<think>.*?<\/think>/gs, '');
+              answer = answer.replace(/<think.*?<\/think>/gs, '');
+              answer = answer.replace(/think>.*?<\/think>/gs, '');
+              
+              console.log('[AI Command] Received answer:', answer);
+              
+    
+              quickAnswerText.textContent = answer;
+              quickAnswerText.style.color = '#4ecdc4';
+
+            } catch (error) {
+              console.error('[AI Command] Error:', error);
+              let errorMessage = 'Sorry, please ask in the larger AI area';
+           
+              errorMessage = errorMessage.replace(/<think>.*?<\/think>/gs, '');
+              errorMessage = errorMessage.replace(/<think.*?<\/think>/gs, '');
+              errorMessage = errorMessage.replace(/think>.*?<\/think>/gs, '');
+              quickAnswerText.textContent = errorMessage;
+              quickAnswerText.style.color = '#ff5c5c';
+            }
+          }
+        }
+      }
+    });
+  } else {
+    console.log('[AI Command] Elements not found:', { 
+      searchInput: !!aiSearchInput, 
+      quickAnswerDisplay: !!quickAnswerDisplay,
+      quickAnswerText: !!quickAnswerText,
+      closeQuickAnswer: !!closeQuickAnswer
+    });
+  }
+  
   const bitstreamBtn = document.getElementById('bitstream-btn');
   if (bitstreamBtn) {
     bitstreamBtn.onclick = () => {

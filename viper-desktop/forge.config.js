@@ -3,7 +3,9 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    name: 'Viper Desktop',
+    icon: 'src/darklogo',
+    asar: true
   },
   rebuildConfig: {},
   makers: [
@@ -41,4 +43,17 @@ module.exports = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'nachuthenappan', // CHANGE to your GitHub username
+          name: 'ViperApp'         // CHANGE to your repo name
+        },
+        prerelease: false,
+        draft: true
+      }
+    }
+  ]
 };

@@ -17,6 +17,8 @@ window.onload = async function() {
   const successMessage = document.getElementById('success-message');
   const form = document.getElementById('generation-form');
   const returnHomeBtn = document.getElementById('return-home-btn');
+  const goEditorBtn = document.getElementById('go-editor-btn');
+  const goEditorBtnOverlay = document.getElementById('go-editor-btn-overlay');
 
   // Fetch board list and populate dropdown
   try {
@@ -73,6 +75,7 @@ window.onload = async function() {
     e.preventDefault();
     buildResult.style.color = '#7ecfff';
     buildResult.textContent = 'Building bitstream with Apio...';
+    goEditorBtn.style.display = 'none';
     try {
       const result = await window.electronAPI.apioBuild({
         projectDir: selectedFolder,
@@ -83,6 +86,7 @@ window.onload = async function() {
       if (result && result.success) {
         buildResult.style.color = '#7fff7f';
         buildResult.textContent = 'Bitstream generated: ' + (result.bitstream || 'Success!');
+        goEditorBtn.style.display = 'block';
         runSuccessAnimation(result.bitstream);
       } else {
         buildResult.style.color = '#ff5c5c';
@@ -91,11 +95,20 @@ window.onload = async function() {
         if (result && result.output) {
           console.log('[Apio Build Output]', result.output);
         }
+        goEditorBtn.style.display = 'block';
       }
     } catch (err) {
       buildResult.style.color = '#ff5c5c';
       buildResult.textContent = err.message || 'Bitstream generation failed.';
+      goEditorBtn.style.display = 'block';
     }
+  };
+
+  goEditorBtn.onclick = () => {
+    window.location = 'editor.html';
+  };
+  goEditorBtnOverlay.onclick = () => {
+    window.location = 'editor.html';
   };
 
   function runSuccessAnimation(bitstreamPath) {
@@ -199,5 +212,9 @@ window.onload = async function() {
     returnHomeBtn.onclick = () => {
       window.location = 'index.html';
     };
+    // After showing success message and Return to Home, also show Go to Editor
+    setTimeout(() => {
+      goEditorBtnOverlay.style.display = 'block';
+    }, 1000);
   }
 }; 

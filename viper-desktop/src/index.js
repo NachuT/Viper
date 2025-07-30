@@ -324,3 +324,89 @@ ipcMain.handle('apio-board-list', async () => {
     });
   });
 });
+
+
+ipcMain.handle('rename-file', async (_event, { oldPath, newName }) => {
+  try {
+    const dir = path.dirname(oldPath);
+    const newPath = path.join(dir, newName);
+    
+    if (fs.existsSync(newPath)) {
+      return { success: false, error: 'File with that name already exists' };
+    }
+    
+    fs.renameSync(oldPath, newPath);
+    console.log('[rename-file] Renamed:', oldPath, 'to', newPath);
+    return { success: true, newPath };
+  } catch (err) {
+    console.error('[rename-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('move-file', async (_event, { sourcePath, targetPath }) => {
+  try {
+    if (fs.existsSync(targetPath)) {
+      return { success: false, error: 'Target already exists' };
+    }
+    
+    fs.renameSync(sourcePath, targetPath);
+    console.log('[move-file] Moved:', sourcePath, 'to', targetPath);
+    return { success: true, newPath: targetPath };
+  } catch (err) {
+    console.error('[move-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('create-file', async (_event, { parentPath, fileName }) => {
+  try {
+    const filePath = path.join(parentPath, fileName);
+    
+    if (fs.existsSync(filePath)) {
+      return { success: false, error: 'File already exists' };
+    }
+    
+    fs.writeFileSync(filePath, '');
+    console.log('[create-file] Created:', filePath);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('[create-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('create-folder', async (_event, { parentPath, folderName }) => {
+  try {
+    const folderPath = path.join(parentPath, folderName);
+    
+    if (fs.existsSync(folderPath)) {
+      return { success: false, error: 'Folder already exists' };
+    }
+    
+    fs.mkdirSync(folderPath, { recursive: true });
+    console.log('[create-folder] Created:', folderPath);
+    return { success: true, folderPath };
+  } catch (err) {
+    console.error('[create-folder] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('delete-file', async (_event, { filePath }) => {
+  try {
+    const stats = fs.statSync(filePath);
+    
+    if (stats.isDirectory()) {
+      fs.rmSync(filePath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(filePath);
+    }
+    
+    console.log('[delete-file] Deleted:', filePath);
+    return { success: true };
+  } catch (err) {
+    console.error('[delete-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});

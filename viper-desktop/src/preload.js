@@ -14,7 +14,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   apioBuild: (params) => ipcRenderer.invoke('apio-build', params),
   apioBoardList: () => ipcRenderer.invoke('apio-board-list'),
 
-  // Terminal APIs
+
+  renameFile: (oldPath, newName) => ipcRenderer.invoke('rename-file', { oldPath, newName }),
+  moveFile: (sourcePath, targetPath) => ipcRenderer.invoke('move-file', { sourcePath, targetPath }),
+  createFile: (parentPath, fileName) => ipcRenderer.invoke('create-file', { parentPath, fileName }),
+  createFolder: (parentPath, folderName) => ipcRenderer.invoke('create-folder', { parentPath, folderName }),
+  deleteFile: (filePath) => ipcRenderer.invoke('delete-file', { filePath }),
+
+ 
   termSpawn: (options) => ipcRenderer.invoke('term:spawn', options),
   termWrite: (data) => ipcRenderer.send('term:write', data),
   termResize: (size) => ipcRenderer.send('term:resize', size),

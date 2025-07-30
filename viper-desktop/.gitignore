@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+private.pem
+public.pem
