@@ -6,7 +6,6 @@ const os = require('os');
 const pty = require('node-pty');
 const fsPromises = fs.promises;
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }

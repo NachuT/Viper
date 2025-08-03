@@ -70,6 +70,8 @@ export default function Home() {
   const [theme, setTheme] = useState("dark");
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeDone, setWelcomeDone] = useState(false);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [showWindowsComing, setShowWindowsComing] = useState(false);
 
   useEffect(() => {
     setLineConfigs(getLineConfigs(NUM_LINES, TOP_MIN, TOP_MAX));
@@ -115,6 +117,38 @@ export default function Home() {
         <>
           <ThemeToggle theme={theme} setTheme={setTheme} />
           <MouseCircle />
+          
+          {/* Thank You Popup */}
+          {showThankYou && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className={`bg-[var(--background)] border border-[var(--accent)] rounded-2xl p-8 mx-4 max-w-md text-center shadow-2xl transform transition-all duration-300 ${showThankYou ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+                <h3 className="text-2xl font-bold text-[var(--foreground)] mb-2">Thank You!</h3>
+                <p className="text-[var(--foreground)]/80 mb-6">Make sure to Unzip!</p>
+                <button
+                  onClick={() => setShowThankYou(false)}
+                  className="px-6 py-3 bg-[var(--accent)] text-black font-bold rounded-xl hover:bg-[var(--accent)]/90 transition-colors"
+                >
+                  Got it!
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Windows Coming Soon Popup */}
+          {showWindowsComing && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className={`bg-[var(--background)] border border-[var(--accent)] rounded-2xl p-8 mx-4 max-w-md text-center shadow-2xl transform transition-all duration-300 ${showWindowsComing ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+                <h3 className="text-2xl font-bold text-[var(--foreground)] mb-2">Coming Soon!</h3>
+                <p className="text-[var(--foreground)]/80 mb-6">Windows version will be released when I get back to my Windows computer.</p>
+                <button
+                  onClick={() => setShowWindowsComing(false)}
+                  className="px-6 py-3 bg-[var(--accent)] text-black font-bold rounded-xl hover:bg-[var(--accent)]/90 transition-colors"
+                >
+                  Got it!
+                </button>
+              </div>
+            </div>
+          )}
           <div className="absolute inset-0 z-0 pointer-events-none" style={{background: 'radial-gradient(ellipse at center, rgba(34,197,94,0.10) 0%, var(--background) 60%)'}} />
           <div className="absolute inset-0 w-full h-full z-0 pointer-events-none">
             {lineConfigs &&
@@ -149,7 +183,9 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mt-2 w-full max-w-xs sm:max-w-none items-center justify-center">
               <a
-                href="#"
+                href="/Viper Desktop-darwin-arm64-1.0.0.zip"
+                download="Viper Desktop-darwin-arm64-1.0.0.zip"
+                onClick={() => setShowThankYou(true)}
                 className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-colors transform hover:scale-105 active:scale-100 duration-150 w-full sm:w-auto
                   ${theme === "light"
                     ? "bg-[var(--foreground)] text-white hover:bg-[var(--accent)] hover:text-white"
@@ -163,6 +199,10 @@ export default function Home() {
               </a>
               <a
                 href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowWindowsComing(true);
+                }}
                 className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-colors transform hover:scale-105 active:scale-100 duration-150 w-full sm:w-auto
                   ${theme === "light"
                     ? "bg-[var(--foreground)] text-white hover:bg-[var(--accent)] hover:text-white"
