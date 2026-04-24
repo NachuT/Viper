@@ -30,3 +30,5 @@ This is a macOS security feature, not a bug in the app. The app is safe to use!
 ## Acknowledgements 
 Thanks to [Hackclub](hackclub.com) for providing the Llama models used in this project for free. 
 
+Made by Akash and Nachu  
+(P.S: This project was originally started on a different account which is no longer available)
