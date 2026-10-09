@@ -33,7 +33,6 @@ Thanks to [Hackclub](hackclub.com) for providing the Llama models used in this p
 ## **Creators**
 Built by:
 
-- **Akash**
 - **Nachu**
 
 *(P.S: This project was originally started on a different account which is no longer available)*
